@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1>API Keys</h1>
+  <a class="btn btn-primary" href="{{ url_for('api_keys_new') }}">New API Key</a>
+</div>
+
+<p>These keys can be used with the <code>X-API-Key</code> header or <code>?api_key=</code> query parameter.</p>
+
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Key</th>
+      <th>Active</th>
+      <th>Created</th>
+      <th>Last used</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for k in api_keys %}
+      <tr>
+        <td>{{ k.name }}</td>
+        <td><code>{{ k.key }}</code></td>
+        <td>
+          {% if k.active %}
+            <span class="badge bg-success">Active</span>
+          {% else %}
+            <span class="badge bg-secondary">Inactive</span>
+          {% endif %}
+        </td>
+        <td>{{ k.created_at }}</td>
+        <td>{{ k.last_used_at or '-' }}</td>
+        <td>
+          <form method="post" action="{{ url_for('api_keys_toggle', key_id=k.id) }}" class="d-inline">
+            <button class="btn btn-sm btn-warning" type="submit">
+              {% if k.active %}Disable{% else %}Enable{% endif %}
+            </button>
+          </form>
+          <form method="post" action="{{ url_for('api_keys_delete', key_id=k.id) }}" class="d-inline"
+                onsubmit="return confirm('Delete this key?');">
+            <button class="btn btn-sm btn-danger" type="submit">Delete</button>
+          </form>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6"><em>No API keys yet. Create one above.</em></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

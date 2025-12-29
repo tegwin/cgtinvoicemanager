@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>New API Key</h1>
+
+<form method="post">
+  <div class="mb-3">
+    <label class="form-label">Name / label</label>
+    <input name="name" class="form-control" required
+           placeholder="e.g. Xero Integration, Website Checkout">
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Key value (optional)</label>
+    <input name="key" class="form-control"
+           placeholder="Leave blank to auto-generate a random key">
+    <div class="form-text">
+      If you leave this empty, a secure random key will be generated for you.
+    </div>
+  </div>
+
+  <button class="btn btn-primary">Create</button>
+</form>
+{% endblock %}

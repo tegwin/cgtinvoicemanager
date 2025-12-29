@@ -8,7 +8,7 @@
 <table class="table table-striped">
   <thead>
     <tr>
-      <th>Name</th><th>Email</th><th>Phone</th><th></th>
+      <th>Name</th><th>Email</th><th>Phone</th><th>Tax</th><th></th>
     </tr>
   </thead>
   <tbody>
@@ -17,6 +17,15 @@
         <td>{{ c.name }}</td>
         <td>{{ c.email }}</td>
         <td>{{ c.phone }}</td>
+        <td>
+          {% if c.use_default_tax %}
+            Default
+          {% elif c.tax_rate is not none %}
+            {{ "%.2f"|format(c.tax_rate) }} %
+          {% else %}
+            -
+          {% endif %}
+        </td>
         <td>
           <a class="btn btn-sm btn-secondary"
              href="{{ url_for('edit_customer', customer_id=c.id) }}">Edit</a>

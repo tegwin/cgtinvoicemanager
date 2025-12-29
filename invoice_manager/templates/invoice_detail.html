@@ -6,8 +6,13 @@
 <p><strong>Issue Date:</strong> {{ invoice.issue_date }}</p>
 <p><strong>Due Date:</strong> {{ invoice.due_date }}</p>
 <p><strong>Status:</strong> {{ invoice.status }}</p>
+
+<p><strong>Subtotal:</strong> {{ "%.2f"|format(invoice.subtotal_amount or 0) }}</p>
+<p><strong>Tax rate:</strong> {{ "%.2f"|format(invoice.tax_rate or 0) }} %</p>
+<p><strong>Tax amount:</strong> {{ "%.2f"|format(invoice.tax_amount or 0) }}</p>
 <p><strong>Total:</strong> {{ "%.2f"|format(invoice.total_amount) }}</p>
 <p><strong>Balance due:</strong> {{ "%.2f"|format(invoice.balance_due) }}</p>
+
 <p><strong>Notes:</strong><br>{{ invoice.notes }}</p>
 
 <h3>Items</h3>

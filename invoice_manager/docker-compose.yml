@@ -23,7 +23,6 @@ services:
       - db
     environment:
       DATABASE_URL: "mysql+pymysql://invoicer:invoicerpassword@db/invoicemanager"
-      API_KEY: "super-secret-api-key"
       SECRET_KEY: "another-secret-key"
       FLASK_APP: "app.py"
     ports:

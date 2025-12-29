@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>API Documentation</h1>
+
+<p>Use an API key from the <strong>API Keys</strong> page and include it in one of:</p>
+<ul>
+  <li>HTTP header: <code>X-API-Key: &lt;your_key_here&gt;</code></li>
+  <li>Or as a query string: <code>?api_key=&lt;your_key_here&gt;</code></li>
+</ul>
+
+{% if example_key %}
+<p>Example key (for testing): <code>{{ example_key.key }}</code></p>
+{% else %}
+<p><strong>No active API keys.</strong> Create one on the <a href="{{ url_for('api_keys_list') }}">API Keys</a> page.</p>
+{% endif %}
+
+<hr>
+
+<h2>Base URL</h2>
+<p>
+  <code>http://&lt;your-server&gt;:5000</code>
+</p>
+<p>For your current server: <code>http://{{ request.host }}</code> (if you are on the server itself, you may use <code>http://127.0.0.1:5000</code>).</p>
+
+<hr>
+
+<h2>Endpoints</h2>
+
+<h3>1. Create Invoice – <code>POST /api/invoices</code></h3>
+
+<p>Create an invoice, with either an existing <code>customer_id</code> or an embedded <code>customer</code> object.</p>
+
+<pre><code>POST /api/invoices
+Headers:
+  Content-Type: application/json
+  X-API-Key: &lt;your_key_here&gt;
+
+Body:
+{
+  "customer": {
+    "name": "API Test Ltd",
+    "email": "api@example.com"
+  },
+  "issue_date": "2025-12-29",
+  "due_date": "2026-01-15",
+  "status": "sent",
+  "notes": "Created via API",
+  "items": [
+    { "description": "Consulting", "quantity": 2, "unit_price": 150.00 }
+  ]
+}
+</code></pre>
+
+<h3>2. Get Invoice – <code>GET /api/invoices/&lt;id&gt;</code></h3>
+
+<pre><code>GET /api/invoices/1
+X-API-Key: &lt;your_key_here&gt;
+</code></pre>
+
+Returns invoice, items, and payments as JSON.
+
+<h3>3. Update Invoice – <code>PUT /api/invoices/&lt;id&gt;</code></h3>
+
+<pre><code>PUT /api/invoices/1
+Headers:
+  Content-Type: application/json
+  X-API-Key: &lt;your_key_here&gt;
+
+Body:
+{
+  "status": "paid",
+  "notes": "Paid via bank transfer",
+  "items": [
+    { "description": "Updated item", "quantity": 3, "unit_price": 120.00 }
+  ]
+}
+</code></pre>
+
+<h3>4. Record Payment (Webhook-style) – <code>POST /api/webhooks/payment</code></h3>
+
+<p>Intended to be called by external systems (payment gateways, etc.).</p>
+
+<pre><code>POST /api/webhooks/payment
+Headers:
+  Content-Type: application/json
+  X-API-Key: &lt;your_key_here&gt;
+
+Body:
+{
+  "invoice_number": "INV-20251229-0001",
+  "amount": 300.00,
+  "payment_date": "2025-12-30",
+  "method": "Card",
+  "external_reference": "STRIPE-123456"
+}
+</code></pre>
+
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Settings</h1>
+
+<form method="post">
+  <div class="mb-3">
+    <label class="form-label">Default tax rate (%)</label>
+    <input type="number" step="0.01" name="default_tax_rate" class="form-control"
+           value="{{ settings.default_tax_rate or 0 }}">
+    <div class="form-text">Example: 20.00 for 20% VAT.</div>
+  </div>
+  <button class="btn btn-primary">Save</button>
+</form>
+{% endblock %}
