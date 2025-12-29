@@ -7,7 +7,7 @@ from secrets import token_hex
 
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    flash, jsonify, abort
+    flash, jsonify, abort, session
 )
 from flask_sqlalchemy import SQLAlchemy
 
@@ -316,6 +316,11 @@ def api_keys_new():
         api_key = APIKey(name=name, key=key_value, active=True)
         db.session.add(api_key)
         db.session.commit()
+
+        # Store in session to show full key ONCE
+        session["new_api_key"] = key_value
+        session["new_api_key_name"] = name
+
         flash("API key created", "success")
         return redirect(url_for("api_keys_list"))
 
@@ -342,8 +347,8 @@ def api_keys_delete(key_id):
 
 @app.route("/api/docs")
 def api_docs():
-    example_key = APIKey.query.filter_by(active=True).first()
-    return render_template("api_docs.html", example_key=example_key)
+    # We don't show a specific key here any more; just usage
+    return render_template("api_docs.html")
 
 
 # Customers

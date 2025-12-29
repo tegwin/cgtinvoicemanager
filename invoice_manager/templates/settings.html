@@ -1,14 +1,95 @@
 {% extends "base.html" %}
-{% block content %}
-<h1>Settings</h1>
 
-<form method="post">
-  <div class="mb-3">
-    <label class="form-label">Default tax rate (%)</label>
-    <input type="number" step="0.01" name="default_tax_rate" class="form-control"
-           value="{{ settings.default_tax_rate or 0 }}">
-    <div class="form-text">Example: 20.00 for 20% VAT.</div>
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">⚙️ Settings</h1>
+  <p class="page-subtitle">
+    Configure tax behaviour and integrations (API keys & webhooks).
+  </p>
+</div>
+
+<div class="panel">
+  <div class="panel-header">
+    <div>
+      <div class="panel-title">Tax Settings</div>
+      <div class="panel-subtitle">
+        Default tax rate used when creating new invoices (if customers use the default).
+      </div>
+    </div>
   </div>
-  <button class="btn btn-primary">Save</button>
-</form>
+
+  <form method="post">
+    <div class="mb-3">
+      <label class="form-label">Default tax rate (%)</label>
+      <input type="number" step="0.01" name="default_tax_rate" class="form-control"
+             value="{{ settings.default_tax_rate or 0 }}">
+      <div class="form-text">
+        Example: <code>20.00</code> for 20% VAT. This is applied when a customer is set to "use default tax".
+      </div>
+    </div>
+
+    <button class="btn btn-primary">Save tax settings</button>
+  </form>
+</div>
+
+<div class="panel">
+  <div class="panel-header">
+    <div>
+      <div class="panel-title">API & Webhooks</div>
+      <div class="panel-subtitle">
+        Use these endpoints and keys to integrate external systems with your invoice manager.
+      </div>
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Base API URL</label>
+    <div class="form-text">
+      Use this base when calling API endpoints from other systems (replace <code>&lt;endpoint&gt;</code> accordingly).
+    </div>
+    <div style="margin-top: 0.3rem; font-family: monospace; font-size: 0.9rem;">
+      <code>http://{{ request.host }}/api/&lt;endpoint&gt;</code>
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Example endpoints</label>
+    <div class="form-text">
+      Create invoice:
+      <code>POST http://{{ request.host }}/api/invoices</code><br>
+      Get invoice:
+      <code>GET http://{{ request.host }}/api/invoices/&lt;id&gt;</code><br>
+      Webhook for recording payments:
+      <code>POST http://{{ request.host }}/api/webhooks/payment</code>
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Webhook usage (payments)</label>
+    <div class="form-text">
+      Configure your payment provider or external system to send a POST request to:
+      <br>
+      <code>http://{{ request.host }}/api/webhooks/payment</code>
+      <br><br>
+      The body should include:
+      <code>{"invoice_number": "...", "amount": 123.45, "payment_date": "YYYY-MM-DD"}</code>
+      and the request must include your API key (see below).
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">API keys management</label>
+    <div class="form-text">
+      Create and manage API keys used by external systems. Full key values are only shown once at creation time.
+    </div>
+    <div style="margin-top: 0.6rem; display: flex; gap: 0.6rem; flex-wrap: wrap;">
+      <a href="{{ url_for('api_keys_list') }}" class="btn btn-secondary btn-sm">
+        🔑 Manage API Keys
+      </a>
+      <a href="{{ url_for('api_docs') }}" class="btn btn-secondary btn-sm">
+        📚 API Documentation
+      </a>
+    </div>
+  </div>
+</div>
 {% endblock %}

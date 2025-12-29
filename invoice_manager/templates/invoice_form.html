@@ -1,80 +1,89 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>{{ 'Edit Invoice' if invoice else 'New Invoice' }}</h1>
+<div class="page-header">
+  <h1 class="page-title">
+    {{ 'Edit Invoice' if invoice else 'New Invoice' }}
+  </h1>
+  <p class="page-subtitle">
+    Select a customer, set dates and add line items.
+  </p>
+</div>
 
-<form method="post">
-  <div class="mb-3">
-    <label class="form-label">Customer</label>
-    <select name="customer_id" class="form-select" required>
-      <option value="">-- Choose customer --</option>
-      {% for c in customers %}
-        <option value="{{ c.id }}"
-          {% if invoice and invoice.customer_id == c.id %}selected{% endif %}>
-          {{ c.name }}
-        </option>
-      {% endfor %}
-    </select>
-  </div>
+<div class="panel">
+  <form method="post">
+    <div class="mb-3">
+      <label class="form-label">Customer</label>
+      <select name="customer_id" class="form-select" required>
+        <option value="">-- Choose customer --</option>
+        {% for c in customers %}
+          <option value="{{ c.id }}"
+            {% if invoice and invoice.customer_id == c.id %}selected{% endif %}>
+            {{ c.name }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
 
-  <div class="mb-3">
-    <label class="form-label">Issue Date</label>
-    <input type="date" name="issue_date" class="form-control"
-           value="{{ invoice.issue_date if invoice else '' }}" required>
-  </div>
-  <div class="mb-3">
-    <label class="form-label">Due Date</label>
-    <input type="date" name="due_date" class="form-control"
-           value="{{ invoice.due_date if invoice else '' }}" required>
-  </div>
+    <div class="mb-3">
+      <label class="form-label">Issue Date</label>
+      <input type="date" name="issue_date" class="form-control"
+             value="{{ invoice.issue_date if invoice else '' }}" required>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Due Date</label>
+      <input type="date" name="due_date" class="form-control"
+             value="{{ invoice.due_date if invoice else '' }}" required>
+    </div>
 
-  <div class="mb-3">
-    <label class="form-label">Status</label>
-    <select name="status" class="form-select">
-      {% set s = invoice.status if invoice else 'draft' %}
-      {% for status in ['draft','sent','paid','overdue','cancelled'] %}
-        <option value="{{ status }}"
-          {% if s == status %}selected{% endif %}>
-          {{ status|capitalize }}
-        </option>
-      {% endfor %}
-    </select>
-  </div>
+    <div class="mb-3">
+      <label class="form-label">Status</label>
+      <select name="status" class="form-select">
+        {% set s = invoice.status if invoice else 'draft' %}
+        {% for status in ['draft','sent','paid','overdue','cancelled'] %}
+          <option value="{{ status }}"
+            {% if s == status %}selected{% endif %}>
+            {{ status|capitalize }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
 
-  <div class="mb-3">
-    <label class="form-label">Notes</label>
-    <textarea name="notes" class="form-control" rows="3">{{ invoice.notes if invoice else '' }}</textarea>
-  </div>
+    <div class="mb-3">
+      <label class="form-label">Notes</label>
+      <textarea name="notes" class="form-control" rows="3">{{ invoice.notes if invoice else '' }}</textarea>
+    </div>
 
-  <h3>Items</h3>
-  <table class="table" id="items-table">
-    <thead>
-      <tr>
-        <th>Description</th><th>Qty</th><th>Unit Price</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% if invoice %}
-        {% for item in invoice.items %}
+    <h3 style="margin-top: 1.4rem; margin-bottom: 0.8rem;">Items</h3>
+    <table id="items-table">
+      <thead>
+        <tr>
+          <th>Description</th><th>Qty</th><th>Unit Price</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if invoice %}
+          {% for item in invoice.items %}
+            <tr>
+              <td><input name="item_description" class="form-control"
+                         value="{{ item.description }}"></td>
+              <td><input name="item_quantity" class="form-control"
+                         value="{{ item.quantity }}"></td>
+              <td><input name="item_unit_price" class="form-control"
+                         value="{{ item.unit_price }}"></td>
+            </tr>
+          {% endfor %}
+        {% endif %}
+        {% for i in range(5) %}
           <tr>
-            <td><input name="item_description" class="form-control"
-                       value="{{ item.description }}"></td>
-            <td><input name="item_quantity" class="form-control"
-                       value="{{ item.quantity }}"></td>
-            <td><input name="item_unit_price" class="form-control"
-                       value="{{ item.unit_price }}"></td>
+            <td><input name="item_description" class="form-control"></td>
+            <td><input name="item_quantity" class="form-control"></td>
+            <td><input name="item_unit_price" class="form-control"></td>
           </tr>
         {% endfor %}
-      {% endif %}
-      {% for i in range(5) %}
-        <tr>
-          <td><input name="item_description" class="form-control"></td>
-          <td><input name="item_quantity" class="form-control"></td>
-          <td><input name="item_unit_price" class="form-control"></td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+      </tbody>
+    </table>
 
-  <button class="btn btn-primary">Save Invoice</button>
-</form>
+    <button class="btn btn-primary mt-3">Save Invoice</button>
+  </form>
+</div>
 {% endblock %}

@@ -5,7 +5,7 @@
   <title>{% block title %}CGT Invoice Manager{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- Fonts similar to the app you like -->
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -36,8 +36,6 @@
       min-height: 100vh;
       line-height: 1.6;
     }
-
-    /* Navbar */
 
     .navbar {
       background: rgba(14, 14, 36, 0.98);
@@ -87,6 +85,7 @@
       font-weight: 600;
       font-size: 1.1rem;
       letter-spacing: 0.03em;
+      color: var(--text-primary);
     }
 
     .brand-subtitle {
@@ -128,8 +127,6 @@
       color: #fff;
       box-shadow: 0 0 14px rgba(59, 130, 246, 0.6);
     }
-
-    /* Layout */
 
     .main-content {
       max-width: 1400px;
@@ -182,8 +179,6 @@
       color: var(--text-secondary);
     }
 
-    /* Tables */
-
     table {
       width: 100%;
       border-collapse: collapse;
@@ -208,8 +203,6 @@
     tr:hover td {
       background: rgba(30, 64, 175, 0.08);
     }
-
-    /* Forms */
 
     form .mb-3 {
       margin-bottom: 1rem;
@@ -269,8 +262,6 @@
       border-color: var(--accent-blue);
     }
 
-    /* Buttons */
-
     .btn {
       display: inline-flex;
       align-items: center;
@@ -312,8 +303,6 @@
       font-size: 0.8rem;
     }
 
-    /* Flash messages */
-
     .alert {
       border-radius: 12px;
       padding: 0.7rem 1rem;
@@ -335,8 +324,6 @@
       border-color: rgba(239, 68, 68, 0.6);
       background: rgba(127, 29, 29, 0.85);
     }
-
-    /* Misc */
 
     .text-muted {
       color: var(--text-muted);
@@ -423,7 +410,6 @@
   </main>
 
   <script>
-    // Auto-dismiss flash messages
     document.querySelectorAll('.alert').forEach(alert => {
       setTimeout(() => {
         alert.style.opacity = '0';
