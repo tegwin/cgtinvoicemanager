@@ -4,6 +4,7 @@ from decimal import Decimal
 import csv
 import io
 from secrets import token_hex
+from functools import wraps
 
 import requests
 
@@ -26,6 +27,10 @@ app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
     "mysql+pymysql://root:password@localhost/invoicemanager"
 )
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+# Simple admin login (no multi-user yet)
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "changeme")
 
 db = SQLAlchemy(app)
 
@@ -61,6 +66,35 @@ class Customer(db.Model):
 
     def __repr__(self):
         return f"<Customer {self.id} {self.name}>"
+
+
+class Product(db.Model):
+    __tablename__ = "products"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    sku = db.Column(db.String(100))
+    type = db.Column(db.String(50), nullable=False, default="service")  # product|service
+    description = db.Column(db.Text)
+    unit_price = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, nullable=False,
+        default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "sku": self.sku,
+            "type": self.type,
+            "description": self.description,
+            "unit_price": float(self.unit_price),
+            "active": self.active,
+        }
 
 
 class Invoice(db.Model):
@@ -217,6 +251,15 @@ class APIKey(db.Model):
 # Helpers
 # -----------------------
 
+def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("logged_in"):
+            return redirect(url_for("login", next=request.url))
+        return view(*args, **kwargs)
+    return wrapped
+
+
 def generate_api_key_value():
     return token_hex(32)
 
@@ -297,10 +340,37 @@ def send_outbound_webhook(event_type: str, payload: dict):
 
 
 # -----------------------
+# Auth routes
+# -----------------------
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = (request.form.get("username") or "").strip()
+        password = request.form.get("password") or ""
+        if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+            session["logged_in"] = True
+            flash("Logged in", "success")
+            next_url = request.args.get("next") or url_for("index")
+            return redirect(next_url)
+        else:
+            flash("Invalid credentials", "danger")
+    return render_template("login.html")
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    flash("Logged out", "success")
+    return redirect(url_for("login"))
+
+
+# -----------------------
 # Web UI routes
 # -----------------------
 
 @app.route("/")
+@login_required
 def index():
     return redirect(url_for("list_invoices"))
 
@@ -308,6 +378,7 @@ def index():
 # Settings
 
 @app.route("/settings", methods=["GET", "POST"])
+@login_required
 def settings_view():
     settings = get_settings()
     if request.method == "POST":
@@ -332,12 +403,22 @@ def settings_view():
 # API Keys management
 
 @app.route("/api-keys")
+@login_required
 def api_keys_list():
     api_keys = APIKey.query.order_by(APIKey.created_at.desc()).all()
-    return render_template("api_keys_list.html", api_keys=api_keys)
+    # show newly created key once
+    new_key_value = session.pop("new_api_key", None)
+    new_key_name = session.pop("new_api_key_name", None)
+    return render_template(
+        "api_keys_list.html",
+        api_keys=api_keys,
+        new_key_value=new_key_value,
+        new_key_name=new_key_name,
+    )
 
 
 @app.route("/api-keys/new", methods=["GET", "POST"])
+@login_required
 def api_keys_new():
     if request.method == "POST":
         name = (request.form.get("name") or "").strip()
@@ -357,7 +438,6 @@ def api_keys_new():
         db.session.add(api_key)
         db.session.commit()
 
-        # Store in session to show full key ONCE
         session["new_api_key"] = key_value
         session["new_api_key_name"] = name
 
@@ -368,6 +448,7 @@ def api_keys_new():
 
 
 @app.route("/api-keys/<int:key_id>/toggle", methods=["POST"])
+@login_required
 def api_keys_toggle(key_id):
     api_key = APIKey.query.get_or_404(key_id)
     api_key.active = not api_key.active
@@ -377,6 +458,7 @@ def api_keys_toggle(key_id):
 
 
 @app.route("/api-keys/<int:key_id>/delete", methods=["POST"])
+@login_required
 def api_keys_delete(key_id):
     api_key = APIKey.query.get_or_404(key_id)
     db.session.delete(api_key)
@@ -386,20 +468,22 @@ def api_keys_delete(key_id):
 
 
 @app.route("/api/docs")
+@login_required
 def api_docs():
-    # We don't show a specific key here any more; just usage
     return render_template("api_docs.html")
 
 
 # Customers
 
 @app.route("/customers")
+@login_required
 def list_customers():
     customers = Customer.query.order_by(Customer.name).all()
     return render_template("customers_list.html", customers=customers)
 
 
 @app.route("/customers/new", methods=["GET", "POST"])
+@login_required
 def new_customer():
     if request.method == "POST":
         name = request.form.get("name", "").strip()
@@ -437,6 +521,7 @@ def new_customer():
 
 
 @app.route("/customers/<int:customer_id>/edit", methods=["GET", "POST"])
+@login_required
 def edit_customer(customer_id):
     customer = Customer.query.get_or_404(customer_id)
 
@@ -473,34 +558,126 @@ def edit_customer(customer_id):
     return render_template("customer_form.html", customer=customer)
 
 
+# Products
+
+@app.route("/products")
+@login_required
+def list_products():
+    products = Product.query.order_by(Product.name).all()
+    return render_template("products_list.html", products=products)
+
+
+@app.route("/products/new", methods=["GET", "POST"])
+@login_required
+def new_product():
+    if request.method == "POST":
+        name = (request.form.get("name") or "").strip()
+        if not name:
+            flash("Name is required", "danger")
+            return render_template("product_form.html", product=None)
+
+        unit_price_str = (request.form.get("unit_price") or "0").strip()
+        try:
+            unit_price = Decimal(unit_price_str)
+        except Exception:
+            flash("Invalid price", "danger")
+            return render_template("product_form.html", product=None)
+
+        product = Product(
+            name=name,
+            sku=(request.form.get("sku") or "").strip() or None,
+            type=request.form.get("type") or "service",
+            description=request.form.get("description"),
+            unit_price=unit_price,
+            active=bool(request.form.get("active")),
+        )
+        db.session.add(product)
+        db.session.commit()
+        flash("Product created", "success")
+        return redirect(url_for("list_products"))
+
+    return render_template("product_form.html", product=None)
+
+
+@app.route("/products/<int:product_id>/edit", methods=["GET", "POST"])
+@login_required
+def edit_product(product_id):
+    product = Product.query.get_or_404(product_id)
+
+    if request.method == "POST":
+        name = (request.form.get("name") or "").strip()
+        if not name:
+            flash("Name is required", "danger")
+            return render_template("product_form.html", product=product)
+
+        unit_price_str = (request.form.get("unit_price") or "0").strip()
+        try:
+            unit_price = Decimal(unit_price_str)
+        except Exception:
+            flash("Invalid price", "danger")
+            return render_template("product_form.html", product=product)
+
+        product.name = name
+        product.sku = (request.form.get("sku") or "").strip() or None
+        product.type = request.form.get("type") or "service"
+        product.description = request.form.get("description")
+        product.unit_price = unit_price
+        product.active = bool(request.form.get("active"))
+
+        db.session.commit()
+        flash("Product updated", "success")
+        return redirect(url_for("list_products"))
+
+    return render_template("product_form.html", product=product)
+
+
 # Invoices
 
 @app.route("/invoices")
+@login_required
 def list_invoices():
     invoices = Invoice.query.order_by(Invoice.created_at.desc()).all()
     return render_template("invoices_list.html", invoices=invoices)
 
 
 @app.route("/invoices/new", methods=["GET", "POST"])
+@login_required
 def new_invoice():
     customers = Customer.query.order_by(Customer.name).all()
+    settings = get_settings()
+    products = Product.query.filter_by(active=True).order_by(Product.name).all()
     if request.method == "POST":
         return handle_invoice_form()
-    return render_template("invoice_form.html", invoice=None, customers=customers)
+    return render_template(
+        "invoice_form.html",
+        invoice=None,
+        customers=customers,
+        settings=settings,
+        products=products,
+    )
 
 
 @app.route("/invoices/<int:invoice_id>/edit", methods=["GET", "POST"])
+@login_required
 def edit_invoice(invoice_id):
     invoice = Invoice.query.get_or_404(invoice_id)
     customers = Customer.query.order_by(Customer.name).all()
+    settings = get_settings()
+    products = Product.query.filter_by(active=True).order_by(Product.name).all()
 
     if request.method == "POST":
         return handle_invoice_form(invoice)
-    return render_template("invoice_form.html", invoice=invoice, customers=customers)
+    return render_template(
+        "invoice_form.html",
+        invoice=invoice,
+        customers=customers,
+        settings=settings,
+        products=products,
+    )
 
 
 def handle_invoice_form(invoice=None):
-    is_new = invoice is None  # track whether it's a new invoice
+    is_new = invoice is None
 
     customer_id = request.form.get("customer_id")
     issue_date_str = request.form.get("issue_date")
@@ -514,7 +691,15 @@ def handle_invoice_form(invoice=None):
     except Exception:
         flash("Invalid dates", "danger")
         customers = Customer.query.order_by(Customer.name).all()
-        return render_template("invoice_form.html", invoice=invoice, customers=customers)
+        settings = get_settings()
+        products = Product.query.filter_by(active=True).order_by(Product.name).all()
+        return render_template(
+            "invoice_form.html",
+            invoice=invoice,
+            customers=customers,
+            settings=settings,
+            products=products,
+        )
 
     customer = Customer.query.get(int(customer_id)) if customer_id else None
 
@@ -565,7 +750,6 @@ def handle_invoice_form(invoice=None):
     invoice.recalc_totals()
     db.session.commit()
 
-    # 🔔 outbound webhook
     try:
         event_name = "invoice.created" if is_new else "invoice.updated"
         send_outbound_webhook(event_name, invoice.to_dict())
@@ -577,12 +761,14 @@ def handle_invoice_form(invoice=None):
 
 
 @app.route("/invoices/<int:invoice_id>")
+@login_required
 def invoice_detail(invoice_id):
     invoice = Invoice.query.get_or_404(invoice_id)
     return render_template("invoice_detail.html", invoice=invoice)
 
 
 @app.route("/invoices/<int:invoice_id>/payments/new", methods=["POST"])
+@login_required
 def add_payment(invoice_id):
     invoice = Invoice.query.get_or_404(invoice_id)
 
@@ -609,7 +795,6 @@ def add_payment(invoice_id):
     invoice.recalc_totals()
     db.session.commit()
 
-    # 🔔 outbound webhook
     try:
         send_outbound_webhook(
             "payment.recorded",
@@ -628,6 +813,7 @@ def add_payment(invoice_id):
 # CSV Import
 
 @app.route("/import/customers", methods=["GET", "POST"])
+@login_required
 def import_customers():
     if request.method == "GET":
         return render_template("import_customers.html")
@@ -705,6 +891,7 @@ def import_customers():
 
 
 @app.route("/import/invoices", methods=["GET", "POST"])
+@login_required
 def import_invoices():
     if request.method == "GET":
         return render_template("import_invoices.html")
@@ -817,6 +1004,88 @@ def import_invoices():
 
     flash(f"Imported {count} invoices. {errors} rows skipped due to errors.", "success")
     return redirect(url_for("list_invoices"))
+
+
+@app.route("/import/products", methods=["GET", "POST"])
+@login_required
+def import_products():
+    if request.method == "GET":
+        return render_template("import_products.html")
+
+    file = request.files.get("file")
+    if not file or file.filename == "":
+        flash("Please choose a CSV file.", "danger")
+        return redirect(url_for("import_products"))
+
+    try:
+        content = file.read().decode("utf-8-sig")
+        f = io.StringIO(content)
+        reader = csv.DictReader(f)
+    except Exception as e:
+        flash(f"Could not read CSV file: {e}", "danger")
+        return redirect(url_for("import_products"))
+
+    if not reader.fieldnames:
+        flash("CSV file has no header row.", "danger")
+        return redirect(url_for("import_products"))
+
+    required = ["name", "unit_price"]
+    missing = [c for c in required if c not in reader.fieldnames]
+    if missing:
+        flash(f"Missing required columns: {', '.join(missing)}", "danger")
+        return redirect(url_for("import_products"))
+
+    created = 0
+    updated = 0
+
+    for row in reader:
+        name = (row.get("name") or "").strip()
+        if not name:
+            continue
+
+        sku = (row.get("sku") or "").strip() or None
+        type_val = (row.get("type") or "service").strip().lower()
+        if type_val not in ("product", "service"):
+            type_val = "service"
+
+        unit_price_str = (row.get("unit_price") or "0").strip()
+        try:
+            unit_price = Decimal(unit_price_str)
+        except Exception:
+            continue
+
+        active_val = (row.get("active") or "1").strip()
+        active = active_val not in ("0", "false", "False", "")
+
+        product = None
+        if sku:
+            product = Product.query.filter_by(sku=sku).first()
+        if not product:
+            product = Product.query.filter_by(name=name).first()
+
+        if product:
+            product.name = name
+            product.sku = sku
+            product.type = type_val
+            product.description = (row.get("description") or "").strip() or None
+            product.unit_price = unit_price
+            product.active = active
+            updated += 1
+        else:
+            product = Product(
+                name=name,
+                sku=sku,
+                type=type_val,
+                description=(row.get("description") or "").strip() or None,
+                unit_price=unit_price,
+                active=active,
+            )
+            db.session.add(product)
+            created += 1
+
+    db.session.commit()
+    flash(f"Imported products. Created: {created}, Updated: {updated}", "success")
+    return redirect(url_for("list_products"))
 
 
 # API endpoints
@@ -1027,6 +1296,78 @@ def api_webhook_payment():
         "invoice": invoice.to_dict(include_items=False),
         "payment": payment.to_dict()
     }), 201
+
+
+# Products API
+
+@app.route("/api/products", methods=["GET", "POST"])
+def api_products():
+    require_api_key()
+    if request.method == "GET":
+        products = Product.query.order_by(Product.name).all()
+        return jsonify([p.to_dict() for p in products])
+
+    data = request.get_json(force=True)
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "name is required"}), 400
+
+    unit_price_str = str(data.get("unit_price", "0"))
+    try:
+        unit_price = Decimal(unit_price_str)
+    except Exception:
+        return jsonify({"error": "invalid unit_price"}), 400
+
+    product = Product(
+        name=name,
+        sku=data.get("sku"),
+        type=data.get("type") or "service",
+        description=data.get("description"),
+        unit_price=unit_price,
+        active=data.get("active", True),
+    )
+    db.session.add(product)
+    db.session.commit()
+    return jsonify(product.to_dict()), 201
+
+
+@app.route("/api/products/<int:product_id>", methods=["GET", "PUT"])
+def api_product_detail(product_id):
+    require_api_key()
+    product = Product.query.get_or_404(product_id)
+
+    if request.method == "GET":
+        return jsonify(product.to_dict())
+
+    data = request.get_json(force=True)
+    if "name" in data:
+        name = (data.get("name") or "").strip()
+        if not name:
+            return jsonify({"error": "name cannot be empty"}), 400
+        product.name = name
+
+    if "sku" in data:
+        product.sku = data.get("sku")
+
+    if "type" in data:
+        type_val = (data.get("type") or "service").strip().lower()
+        if type_val in ("product", "service"):
+            product.type = type_val
+
+    if "description" in data:
+        product.description = data.get("description")
+
+    if "unit_price" in data:
+        try:
+            product.unit_price = Decimal(str(data.get("unit_price")))
+        except Exception:
+            return jsonify({"error": "invalid unit_price"}), 400
+
+    if "active" in data:
+        product.active = bool(data.get("active"))
+
+    db.session.commit()
+    return jsonify(product.to_dict())
 
 
 # CLI helper

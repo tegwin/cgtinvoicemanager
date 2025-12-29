@@ -1,89 +1,348 @@
 {% extends "base.html" %}
+
 {% block content %}
-<div class="page-header">
-  <h1 class="page-title">
-    {{ 'Edit Invoice' if invoice else 'New Invoice' }}
-  </h1>
-  <p class="page-subtitle">
-    Select a customer, set dates and add line items.
-  </p>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h2 class="mb-0">
+      {% if invoice %}Edit Invoice{% else %}New Invoice{% endif %}
+    </h2>
+    <div class="text-muted small">
+      Choose a customer, add product lines, and review totals in real time.
+    </div>
+  </div>
 </div>
 
-<div class="panel">
-  <form method="post">
-    <div class="mb-3">
-      <label class="form-label">Customer</label>
-      <select name="customer_id" class="form-select" required>
-        <option value="">-- Choose customer --</option>
-        {% for c in customers %}
-          <option value="{{ c.id }}"
-            {% if invoice and invoice.customer_id == c.id %}selected{% endif %}>
-            {{ c.name }}
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card-dark p-3 p-md-4 mb-3">
+      <form method="post" id="invoice-form">
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label">Customer</label>
+            <select name="customer_id" class="form-select" id="customer-select" required>
+              <option value="">Select customer...</option>
+              {% for c in customers %}
+                {% set effective_tax = (c.tax_rate if not c.use_default_tax and c.tax_rate is not none else settings.default_tax_rate) %}
+                <option value="{{ c.id }}"
+                        data-tax-rate="{{ effective_tax or 0 }}"
+                        {% if invoice and invoice.customer_id == c.id %}selected{% endif %}>
+                  {{ c.name }}{% if c.email %} – {{ c.email }}{% endif %}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Issue date</label>
+            <input type="date" name="issue_date" class="form-control"
+                   value="{{ (invoice.issue_date if invoice else None) or (now().date() if false else '') }}"
+                   {% if invoice %}value="{{ invoice.issue_date }}"{% endif %}
+                   required>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Due date</label>
+            <input type="date" name="due_date" class="form-control"
+                   {% if invoice %}value="{{ invoice.due_date }}"{% endif %}
+                   required>
+          </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <label class="form-label">Status</label>
+            <select name="status" class="form-select">
+              {% set current_status = invoice.status if invoice else 'draft' %}
+              {% for s in ['draft','sent','paid','overdue','cancelled'] %}
+                <option value="{{ s }}" {% if current_status == s %}selected{% endif %}>
+                  {{ s|capitalize }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-8">
+            <label class="form-label">Notes</label>
+            <textarea name="notes" class="form-control" rows="2">{{ invoice.notes if invoice else '' }}</textarea>
+          </div>
+        </div>
+
+        <input type="hidden" id="tax-rate-input" value="{{ (invoice.tax_rate if invoice and invoice.tax_rate is not none else settings.default_tax_rate) or 0 }}">
+
+        <div class="mb-2 d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Line items</h5>
+          <button type="button" class="btn btn-sm btn-outline-light" id="add-line-btn">
+            <i class="fa-solid fa-plus me-1"></i> Add line
+          </button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-dark align-middle mb-0" id="items-table">
+            <thead>
+              <tr>
+                <th style="width: 25%;">Product/Service</th>
+                <th style="width: 30%;">Description</th>
+                <th style="width: 12%;">Qty</th>
+                <th style="width: 15%;">Unit price</th>
+                <th style="width: 15%;">Line total</th>
+                <th style="width: 3%;"></th>
+              </tr>
+            </thead>
+            <tbody>
+            {% if invoice and invoice.items %}
+              {% for item in invoice.items %}
+                <tr class="item-row">
+                  <td>
+                    <select class="form-select product-select">
+                      <option value="">Manual...</option>
+                      {% for p in products %}
+                        <option value="{{ p.id }}"
+                                data-description="{{ p.description|e }}"
+                                data-price="{{ p.unit_price }}">
+                          {{ p.name }}
+                        </option>
+                      {% endfor %}
+                    </select>
+                  </td>
+                  <td>
+                    <input type="text" name="item_description" class="form-control"
+                           value="{{ item.description }}">
+                  </td>
+                  <td>
+                    <input type="number" step="0.01" min="0" name="item_quantity"
+                           class="form-control text-end"
+                           value="{{ item.quantity }}">
+                  </td>
+                  <td>
+                    <input type="number" step="0.01" min="0" name="item_unit_price"
+                           class="form-control text-end"
+                           value="{{ item.unit_price }}">
+                  </td>
+                  <td class="text-end">
+                    <span class="line-total">{{ item.line_total }}</span>
+                  </td>
+                  <td>
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-line-btn">
+                      <i class="fa-solid fa-xmark"></i>
+                    </button>
+                  </td>
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr class="item-row">
+                <td>
+                  <select class="form-select product-select">
+                    <option value="">Manual...</option>
+                    {% for p in products %}
+                      <option value="{{ p.id }}"
+                              data-description="{{ p.description|e }}"
+                              data-price="{{ p.unit_price }}">
+                        {{ p.name }}
+                      </option>
+                    {% endfor %}
+                  </select>
+                </td>
+                <td>
+                  <input type="text" name="item_description" class="form-control">
+                </td>
+                <td>
+                  <input type="number" step="0.01" min="0" name="item_quantity"
+                         class="form-control text-end" value="1">
+                </td>
+                <td>
+                  <input type="number" step="0.01" min="0" name="item_unit_price"
+                         class="form-control text-end" value="0.00">
+                </td>
+                <td class="text-end">
+                  <span class="line-total">0.00</span>
+                </td>
+                <td>
+                  <button type="button" class="btn btn-sm btn-outline-danger remove-line-btn">
+                    <i class="fa-solid fa-xmark"></i>
+                  </button>
+                </td>
+              </tr>
+            {% endif %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mt-3 d-flex justify-content-between">
+          <a href="{{ url_for('list_invoices') }}" class="btn btn-outline-light">
+            Cancel
+          </a>
+          <button type="submit" class="btn btn-primary">
+            Save invoice
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card-dark p-3 p-md-4">
+      <h5 class="mb-3">Totals</h5>
+      <div class="d-flex justify-content-between mb-2">
+        <span class="text-muted">Subtotal</span>
+        <span id="summary-subtotal">0.00</span>
+      </div>
+      <div class="d-flex justify-content-between mb-2">
+        <span class="text-muted">
+          VAT (<span id="summary-tax-rate">{{ (invoice.tax_rate if invoice and invoice.tax_rate is not none else settings.default_tax_rate) or 0 }}</span>%)
+        </span>
+        <span id="summary-tax">0.00</span>
+      </div>
+      <hr class="my-2" style="border-color: rgba(255,255,255,0.1);">
+      <div class="d-flex justify-content-between align-items-center mb-1">
+        <span class="fw-semibold">Total</span>
+        <span class="fw-bold fs-5" id="summary-total">0.00</span>
+      </div>
+      <div class="text-muted small">
+        Totals are indicative based on the current customer tax settings and line items.
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  const products = [
+    {% for p in products %}
+    {
+      id: {{ p.id }},
+      name: "{{ p.name|e }}",
+      description: "{{ (p.description or '')|e }}",
+      price: {{ p.unit_price or 0 }}
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ];
+
+  function recalcTotals() {
+    let subtotal = 0;
+    document.querySelectorAll("#items-table tbody tr.item-row").forEach(row => {
+      const qtyInput = row.querySelector('input[name="item_quantity"]');
+      const priceInput = row.querySelector('input[name="item_unit_price"]');
+      const lineSpan = row.querySelector(".line-total");
+
+      const qty = parseFloat(qtyInput.value || "0") || 0;
+      const price = parseFloat(priceInput.value || "0") || 0;
+      const line = qty * price;
+      subtotal += line;
+
+      if (lineSpan) {
+        lineSpan.textContent = line.toFixed(2);
+      }
+    });
+
+    const taxRateInput = document.getElementById("tax-rate-input");
+    const taxRateSpan = document.getElementById("summary-tax-rate");
+    let taxRate = parseFloat(taxRateInput.value || "0") || 0;
+    const tax = subtotal * taxRate / 100.0;
+    const total = subtotal + tax;
+
+    document.getElementById("summary-subtotal").textContent = subtotal.toFixed(2);
+    document.getElementById("summary-tax").textContent = tax.toFixed(2);
+    document.getElementById("summary-total").textContent = total.toFixed(2);
+    if (taxRateSpan) {
+      taxRateSpan.textContent = taxRate.toFixed(2).replace(/\.00$/, '');
+    }
+  }
+
+  function bindRowEvents(row) {
+    const qtyInput = row.querySelector('input[name="item_quantity"]');
+    const priceInput = row.querySelector('input[name="item_unit_price"]');
+    const removeBtn = row.querySelector(".remove-line-btn");
+    const productSelect = row.querySelector(".product-select");
+
+    [qtyInput, priceInput].forEach(input => {
+      if (!input) return;
+      input.addEventListener("input", recalcTotals);
+    });
+
+    if (removeBtn) {
+      removeBtn.addEventListener("click", () => {
+        const rows = document.querySelectorAll("#items-table tbody tr.item-row");
+        if (rows.length > 1) {
+          row.remove();
+          recalcTotals();
+        }
+      });
+    }
+
+    if (productSelect) {
+      productSelect.addEventListener("change", () => {
+        const selected = productSelect.options[productSelect.selectedIndex];
+        const descInput = row.querySelector('input[name="item_description"]');
+        const priceInput = row.querySelector('input[name="item_unit_price"]');
+        const desc = selected.getAttribute("data-description") || "";
+        const price = selected.getAttribute("data-price") || "";
+
+        if (desc && descInput.value.trim() === "") {
+          descInput.value = desc;
+        }
+        if (price) {
+          priceInput.value = parseFloat(price).toFixed(2);
+        }
+        recalcTotals();
+      });
+    }
+  }
+
+  document.querySelectorAll("#items-table tbody tr.item-row").forEach(bindRowEvents);
+
+  document.getElementById("add-line-btn").addEventListener("click", () => {
+    const tbody = document.querySelector("#items-table tbody");
+    const row = document.createElement("tr");
+    row.classList.add("item-row");
+    row.innerHTML = `
+      <td>
+        <select class="form-select product-select">
+          <option value="">Manual...</option>
+          {% for p in products %}
+          <option value="{{ p.id }}"
+                  data-description="{{ p.description|e }}"
+                  data-price="{{ p.unit_price }}">
+            {{ p.name }}
           </option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <div class="mb-3">
-      <label class="form-label">Issue Date</label>
-      <input type="date" name="issue_date" class="form-control"
-             value="{{ invoice.issue_date if invoice else '' }}" required>
-    </div>
-    <div class="mb-3">
-      <label class="form-label">Due Date</label>
-      <input type="date" name="due_date" class="form-control"
-             value="{{ invoice.due_date if invoice else '' }}" required>
-    </div>
-
-    <div class="mb-3">
-      <label class="form-label">Status</label>
-      <select name="status" class="form-select">
-        {% set s = invoice.status if invoice else 'draft' %}
-        {% for status in ['draft','sent','paid','overdue','cancelled'] %}
-          <option value="{{ status }}"
-            {% if s == status %}selected{% endif %}>
-            {{ status|capitalize }}
-          </option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <div class="mb-3">
-      <label class="form-label">Notes</label>
-      <textarea name="notes" class="form-control" rows="3">{{ invoice.notes if invoice else '' }}</textarea>
-    </div>
-
-    <h3 style="margin-top: 1.4rem; margin-bottom: 0.8rem;">Items</h3>
-    <table id="items-table">
-      <thead>
-        <tr>
-          <th>Description</th><th>Qty</th><th>Unit Price</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% if invoice %}
-          {% for item in invoice.items %}
-            <tr>
-              <td><input name="item_description" class="form-control"
-                         value="{{ item.description }}"></td>
-              <td><input name="item_quantity" class="form-control"
-                         value="{{ item.quantity }}"></td>
-              <td><input name="item_unit_price" class="form-control"
-                         value="{{ item.unit_price }}"></td>
-            </tr>
           {% endfor %}
-        {% endif %}
-        {% for i in range(5) %}
-          <tr>
-            <td><input name="item_description" class="form-control"></td>
-            <td><input name="item_quantity" class="form-control"></td>
-            <td><input name="item_unit_price" class="form-control"></td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+        </select>
+      </td>
+      <td>
+        <input type="text" name="item_description" class="form-control">
+      </td>
+      <td>
+        <input type="number" step="0.01" min="0" name="item_quantity"
+               class="form-control text-end" value="1">
+      </td>
+      <td>
+        <input type="number" step="0.01" min="0" name="item_unit_price"
+               class="form-control text-end" value="0.00">
+      </td>
+      <td class="text-end">
+        <span class="line-total">0.00</span>
+      </td>
+      <td>
+        <button type="button" class="btn btn-sm btn-outline-danger remove-line-btn">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </td>
+    `;
+    tbody.appendChild(row);
+    bindRowEvents(row);
+    recalcTotals();
+  });
 
-    <button class="btn btn-primary mt-3">Save Invoice</button>
-  </form>
-</div>
+  const customerSelect = document.getElementById("customer-select");
+  const taxRateInput = document.getElementById("tax-rate-input");
+  if (customerSelect && taxRateInput) {
+    customerSelect.addEventListener("change", () => {
+      const opt = customerSelect.options[customerSelect.selectedIndex];
+      const rate = opt.getAttribute("data-tax-rate") || "0";
+      taxRateInput.value = rate;
+      recalcTotals();
+    });
+  }
+
+  recalcTotals();
+})();
+</script>
 {% endblock %}

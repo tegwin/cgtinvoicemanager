@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h2 class="mb-0">Import Products</h2>
+    <div class="text-muted small">
+      Upload a CSV to bulk create or update products &amp; services.
+    </div>
+  </div>
+</div>
+
+<div class="card-dark p-3 p-md-4">
+  <form method="post" enctype="multipart/form-data">
+    <div class="mb-3">
+      <label class="form-label">CSV file</label>
+      <input type="file" name="file" class="form-control" accept=".csv" required>
+    </div>
+    <p class="text-muted small mb-2">
+      Expected columns:
+      <code>name</code>,
+      <code>sku</code>,
+      <code>type</code> (product/service),
+      <code>unit_price</code>,
+      <code>description</code>,
+      <code>active</code> (1/0 or true/false).
+    </p>
+    <button class="btn btn-primary">Upload &amp; import</button>
+  </form>
+</div>
+{% endblock %}

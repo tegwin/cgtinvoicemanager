@@ -2,423 +2,197 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>{% block title %}CGT Invoice Manager{% endblock %}</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invoice Manager</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+    rel="stylesheet">
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
   <style>
-    :root {
-      --bg-dark: #0d0d1a;
-      --bg-medium: #141428;
-      --bg-light: #1e1e3f;
-      --bg-card: #1a1a35;
-      --accent-red: #e94560;
-      --accent-yellow: #f0a500;
-      --accent-blue: #3b82f6;
-      --accent-green: #10b981;
-      --text-primary: #ffffff;
-      --text-secondary: #9ca3af;
-      --text-muted: #6b7280;
-      --border: #2d2d5a;
-      --shadow: rgba(0, 0, 0, 0.4);
-    }
-
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-
     body {
-      font-family: 'Outfit', sans-serif;
-      background: radial-gradient(circle at top, #1e1e3f 0, #050514 40%, #02010a 100%);
-      color: var(--text-primary);
-      min-height: 100vh;
-      line-height: 1.6;
+      background: #050716;
+      color: #e4e7f5;
     }
-
     .navbar {
-      background: rgba(14, 14, 36, 0.98);
-      backdrop-filter: blur(18px);
-      border-bottom: 1px solid rgba(45, 45, 90, 0.8);
-      padding: 0.9rem 1.5rem;
-      position: sticky;
-      top: 0;
-      z-index: 100;
+      background: linear-gradient(90deg, #0b1024, #151b3a);
+      border-bottom: 1px solid rgba(255,255,255,0.04);
     }
-
-    .navbar-inner {
-      max-width: 1400px;
-      margin: 0 auto;
+    .app-shell {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1.5rem;
+      min-height: 100vh;
     }
-
-    .navbar-brand {
+    .sidebar {
+      width: 230px;
+      background: radial-gradient(circle at top left, #11152d, #050716);
+      border-right: 1px solid rgba(255,255,255,0.04);
+      padding: 1rem 0.75rem;
+    }
+    .sidebar .nav-link {
+      color: #c3c7f3;
+      border-radius: 999px;
+      padding: 0.45rem 0.85rem;
+      font-size: 0.9rem;
       display: flex;
       align-items: center;
       gap: 0.6rem;
-      text-decoration: none;
     }
-
-    .brand-icon {
-      width: 32px;
-      height: 32px;
-      border-radius: 12px;
-      background: conic-gradient(from 180deg, var(--accent-blue), var(--accent-red), var(--accent-yellow), var(--accent-blue));
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 0 16px rgba(59, 130, 246, 0.8);
-      font-size: 1.2rem;
+    .sidebar .nav-link i {
+      width: 18px;
+      text-align: center;
     }
-
-    .brand-text {
-      display: flex;
-      flex-direction: column;
+    .sidebar .nav-link.active,
+    .sidebar .nav-link:hover {
+      background: rgba(101, 116, 255, 0.18);
+      color: #ffffff;
     }
-
-    .brand-title {
-      font-family: 'Space Grotesk', sans-serif;
-      font-weight: 600;
-      font-size: 1.1rem;
-      letter-spacing: 0.03em;
-      color: var(--text-primary);
+    .main {
+      flex: 1;
+      padding: 1.25rem 2rem;
     }
-
-    .brand-subtitle {
-      font-size: 0.75rem;
-      color: var(--text-secondary);
+    .card-dark {
+      background: rgba(14, 20, 49, 0.95);
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.04);
+      box-shadow: 0 18px 45px rgba(0,0,0,0.55);
     }
-
-    .nav-links {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-      flex-wrap: wrap;
-    }
-
-    .nav-link {
+    .badge-soft {
+      background: rgba(101, 116, 255, 0.14);
+      color: #c3c7ff;
       border-radius: 999px;
-      padding: 0.45rem 0.9rem;
-      font-size: 0.9rem;
-      text-decoration: none;
-      color: var(--text-secondary);
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      transition: all 0.2s ease;
-      white-space: nowrap;
-    }
-
-    .nav-link span.icon {
-      font-size: 1rem;
-    }
-
-    .nav-link:hover {
-      background: rgba(30, 64, 175, 0.4);
-      color: var(--text-primary);
-    }
-
-    .nav-link.active {
-      background: linear-gradient(135deg, var(--accent-blue), var(--accent-red));
-      color: #fff;
-      box-shadow: 0 0 14px rgba(59, 130, 246, 0.6);
-    }
-
-    .main-content {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 1.8rem 1.5rem 2.5rem;
-    }
-
-    .page-header {
-      margin-bottom: 1.8rem;
-    }
-
-    .page-title {
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 2rem;
-      font-weight: 700;
-      margin-bottom: 0.3rem;
-      letter-spacing: 0.02em;
-    }
-
-    .page-subtitle {
-      color: var(--text-secondary);
-      font-size: 0.95rem;
-    }
-
-    .panel {
-      background: radial-gradient(circle at top left, rgba(63, 63, 147, 0.25), rgba(13, 13, 26, 0.95));
-      border-radius: 18px;
-      border: 1px solid rgba(45, 45, 90, 0.9);
-      box-shadow: 0 18px 45px var(--shadow);
-      padding: 1.5rem 1.4rem;
-      margin-bottom: 1.5rem;
-    }
-
-    .panel-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 1rem;
-      gap: 1rem;
-    }
-
-    .panel-title {
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 1.2rem;
-      font-weight: 600;
-    }
-
-    .panel-subtitle {
-      font-size: 0.9rem;
-      color: var(--text-secondary);
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.9rem;
-    }
-
-    th, td {
-      padding: 0.8rem 0.6rem;
-      text-align: left;
-      border-bottom: 1px solid rgba(45, 45, 90, 0.8);
-    }
-
-    th {
-      background: linear-gradient(90deg, rgba(20, 20, 40, 0.9), rgba(16, 16, 35, 0.9));
-      font-weight: 600;
-      color: var(--accent-yellow);
+      padding: 0.15rem 0.6rem;
+      font-size: 0.7rem;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
-      font-size: 0.75rem;
+      letter-spacing: 0.06em;
     }
-
-    tr:hover td {
-      background: rgba(30, 64, 175, 0.08);
-    }
-
-    form .mb-3 {
-      margin-bottom: 1rem;
-    }
-
-    label.form-label {
-      display: block;
-      margin-bottom: 0.3rem;
-      font-size: 0.9rem;
-      color: var(--text-secondary);
-    }
-
-    input.form-control,
-    select.form-select,
-    textarea.form-control {
-      width: 100%;
-      border-radius: 10px;
-      border: 1px solid rgba(55, 65, 81, 0.8);
-      background: rgba(12, 12, 30, 0.95);
-      color: var(--text-primary);
-      padding: 0.55rem 0.7rem;
-      font-size: 0.9rem;
-      outline: none;
-      transition: all 0.2s ease;
-    }
-
-    input.form-control:focus,
-    select.form-select:focus,
-    textarea.form-control:focus {
-      border-color: var(--accent-blue);
-      box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.6);
-    }
-
-    .form-text {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      margin-top: 0.25rem;
-    }
-
-    .form-check {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-      margin-bottom: 0.8rem;
-    }
-
-    .form-check-input {
-      width: 16px;
-      height: 16px;
-      border-radius: 4px;
-      border: 1px solid rgba(55, 65, 81, 0.9);
-      background: rgba(12, 12, 30, 0.95);
-    }
-
-    .form-check-input:checked {
-      background: var(--accent-blue);
-      border-color: var(--accent-blue);
-    }
-
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.35rem;
-      border-radius: 999px;
-      border: none;
-      padding: 0.55rem 1.2rem;
-      font-size: 0.9rem;
-      cursor: pointer;
-      text-decoration: none;
-      transition: all 0.2s ease;
-      font-weight: 500;
-    }
-
     .btn-primary {
-      background: linear-gradient(135deg, var(--accent-blue), var(--accent-red));
-      color: #fff;
-      box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
+      background: #6574ff;
+      border-color: #6574ff;
+      border-radius: 999px;
     }
-
     .btn-primary:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 10px 32px rgba(59, 130, 246, 0.6);
+      background: #7a86ff;
+      border-color: #7a86ff;
     }
-
-    .btn-secondary {
-      background: rgba(31, 41, 55, 0.95);
-      color: var(--text-primary);
-      border: 1px solid rgba(55, 65, 81, 0.9);
-    }
-
-    .btn-secondary:hover {
-      background: rgba(55, 65, 81, 0.95);
-    }
-
-    .btn-sm {
-      padding: 0.4rem 0.8rem;
-      font-size: 0.8rem;
-    }
-
-    .alert {
+    .form-control, .form-select {
+      background: rgba(6, 10, 32, 0.95);
       border-radius: 12px;
-      padding: 0.7rem 1rem;
-      margin-bottom: 0.7rem;
-      font-size: 0.9rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border: 1px solid transparent;
-      background: rgba(17, 24, 39, 0.9);
+      border: 1px solid rgba(255,255,255,0.05);
+      color: #e4e7f5;
     }
-
-    .alert-success {
-      border-color: rgba(16, 185, 129, 0.5);
-      background: rgba(6, 95, 70, 0.8);
+    .form-control:focus, .form-select:focus {
+      background: rgba(6, 10, 32, 1);
+      border-color: #6574ff;
+      box-shadow: 0 0 0 1px rgba(101,116,255,0.5);
+      color: #ffffff;
     }
-
-    .alert-danger {
-      border-color: rgba(239, 68, 68, 0.6);
-      background: rgba(127, 29, 29, 0.85);
+    .table-dark {
+      --bs-table-bg: rgba(6, 10, 32, 0.9);
+      --bs-table-striped-bg: rgba(18, 24, 63, 0.95);
+      --bs-table-border-color: rgba(255,255,255,0.03);
     }
-
-    .text-muted {
-      color: var(--text-muted);
+    a {
+      color: #9fa8ff;
     }
-
-    .mt-3 { margin-top: 1rem; }
-    .mb-3 { margin-bottom: 1rem; }
-
-    @media (max-width: 768px) {
-      .navbar-inner {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-      .nav-links {
-        width: 100%;
-        flex-wrap: wrap;
-      }
-      .main-content {
-        padding: 1.4rem 1rem 2.1rem;
-      }
+    a:hover {
+      color: #c3c9ff;
     }
   </style>
 </head>
 <body>
-  <header class="navbar">
-    <div class="navbar-inner">
-      <a href="{{ url_for('index') }}" class="navbar-brand">
-        <div class="brand-icon">💷</div>
-        <div class="brand-text">
-          <div class="brand-title">CGT Invoice Manager</div>
-          <div class="brand-subtitle">Customers · Invoices · Payments · API</div>
-        </div>
-      </a>
 
-      <nav class="nav-links">
-        <a href="{{ url_for('list_customers') }}"
-           class="nav-link {% if request.endpoint == 'list_customers' or request.endpoint in ['new_customer', 'edit_customer'] %}active{% endif %}">
-          <span class="icon">👥</span><span>Customers</span>
-        </a>
-
-        <a href="{{ url_for('list_invoices') }}"
-           class="nav-link {% if request.endpoint == 'list_invoices' or request.endpoint in ['new_invoice', 'edit_invoice', 'invoice_detail'] %}active{% endif %}">
-          <span class="icon">📄</span><span>Invoices</span>
-        </a>
-
-        <a href="{{ url_for('import_customers') }}"
-           class="nav-link {% if request.endpoint == 'import_customers' %}active{% endif %}">
-          <span class="icon">📥</span><span>Import Customers</span>
-        </a>
-
-        <a href="{{ url_for('import_invoices') }}"
-           class="nav-link {% if request.endpoint == 'import_invoices' %}active{% endif %}">
-          <span class="icon">📥</span><span>Import Invoices</span>
-        </a>
-
-        <a href="{{ url_for('settings_view') }}"
-           class="nav-link {% if request.endpoint == 'settings_view' %}active{% endif %}">
-          <span class="icon">⚙️</span><span>Settings</span>
-        </a>
-
-        <a href="{{ url_for('api_keys_list') }}"
-           class="nav-link {% if request.endpoint in ['api_keys_list', 'api_keys_new'] %}active{% endif %}">
-          <span class="icon">🔑</span><span>API Keys</span>
-        </a>
-
-        <a href="{{ url_for('api_docs') }}"
-           class="nav-link {% if request.endpoint == 'api_docs' %}active{% endif %}">
-          <span class="icon">📚</span><span>API Docs</span>
-        </a>
-      </nav>
+<nav class="navbar navbar-dark px-3">
+  <div class="d-flex align-items-center w-100">
+    <div class="d-flex align-items-center gap-2">
+      <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center"
+           style="width:32px;height:32px;">
+        <i class="fa-solid fa-file-invoice"></i>
+      </div>
+      <div>
+        <div class="fw-semibold">Invoice Manager</div>
+        <div class="badge-soft">Internal billing console</div>
+      </div>
     </div>
-  </header>
-
-  <main class="main-content">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div class="alert alert-{{ category }}">{{ message }}</div>
-        {% endfor %}
+    <div class="ms-auto d-flex align-items-center gap-3">
+      {% if session.get('logged_in') %}
+        <span class="text-muted small d-none d-md-inline">
+          <i class="fa-regular fa-circle-user me-1"></i> Admin
+        </span>
+        <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-light">
+          <i class="fa-solid fa-right-from-bracket me-1"></i> Logout
+        </a>
+      {% else %}
+        <a href="{{ url_for('login') }}" class="btn btn-sm btn-outline-light">
+          <i class="fa-solid fa-right-to-bracket me-1"></i> Login
+        </a>
       {% endif %}
-    {% endwith %}
+    </div>
+  </div>
+</nav>
 
-    {% block content %}{% endblock %}
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="mb-3 text-uppercase text-muted small ps-2">Navigation</div>
+    <nav class="nav flex-column">
+      <a class="nav-link {% if request.endpoint in ['list_invoices', 'invoice_detail', 'new_invoice', 'edit_invoice'] %}active{% endif %}"
+         href="{{ url_for('list_invoices') }}">
+        <i class="fa-solid fa-file-invoice"></i> Invoices
+      </a>
+      <a class="nav-link {% if request.endpoint in ['list_customers','new_customer','edit_customer'] %}active{% endif %}"
+         href="{{ url_for('list_customers') }}">
+        <i class="fa-regular fa-user"></i> Customers
+      </a>
+      <a class="nav-link {% if request.endpoint in ['list_products','new_product','edit_product'] %}active{% endif %}"
+         href="{{ url_for('list_products') }}">
+        <i class="fa-solid fa-box-open"></i> Products &amp; Services
+      </a>
+      <a class="nav-link {% if request.endpoint in ['import_customers','import_invoices','import_products'] %}active{% endif %}"
+         href="{{ url_for('import_customers') }}">
+        <i class="fa-solid fa-file-import"></i> Imports
+      </a>
+    </nav>
+
+    <div class="mt-4 mb-2 text-uppercase text-muted small ps-2">Platform</div>
+    <nav class="nav flex-column">
+      <a class="nav-link {% if request.endpoint == 'settings_view' %}active{% endif %}"
+         href="{{ url_for('settings_view') }}">
+        <i class="fa-solid fa-gear"></i> Settings
+      </a>
+      <a class="nav-link {% if request.endpoint in ['api_keys_list','api_keys_new'] %}active{% endif %}"
+         href="{{ url_for('api_keys_list') }}">
+        <i class="fa-solid fa-key"></i> API Keys
+      </a>
+      <a class="nav-link {% if request.endpoint == 'api_docs' %}active{% endif %}"
+         href="{{ url_for('api_docs') }}">
+        <i class="fa-solid fa-code"></i> API &amp; Webhooks
+      </a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="container-fluid px-0">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="mb-3">
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }} alert-dismissible fade show card-dark" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      {% block content %}{% endblock %}
+    </div>
   </main>
+</div>
 
-  <script>
-    document.querySelectorAll('.alert').forEach(alert => {
-      setTimeout(() => {
-        alert.style.opacity = '0';
-        alert.style.transform = 'translateY(-8px)';
-        setTimeout(() => alert.remove(), 300);
-      }, 4500);
-    });
-  </script>
-
-  {% block scripts %}{% endblock %}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+{% block scripts %}{% endblock %}
 </body>
 </html>
