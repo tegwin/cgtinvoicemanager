@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Import Customers from CSV</h1>
+
+<p>Upload a CSV file with a header row. Columns supported:</p>
+<ul>
+  <li><strong>name</strong> (required)</li>
+  <li>email</li>
+  <li>phone</li>
+  <li>address_line1</li>
+  <li>address_line2</li>
+  <li>city</li>
+  <li>postcode</li>
+  <li>country</li>
+</ul>
+<p>If a row has an <strong>email</strong> that already exists, that customer will be <strong>updated</strong>; otherwise a new one is created.</p>
+
+<form method="post" enctype="multipart/form-data" class="mt-3">
+  <div class="mb-3">
+    <label class="form-label">CSV file</label>
+    <input type="file" name="file" accept=".csv" class="form-control" required>
+  </div>
+  <button class="btn btn-primary">Upload &amp; Import</button>
+</form>
+{% endblock %}

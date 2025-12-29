@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ 'Edit Customer' if customer else 'New Customer' }}</h1>
+<form method="post">
+  <div class="mb-3">
+    <label class="form-label">Name</label>
+    <input name="name" class="form-control"
+           value="{{ customer.name if customer else '' }}" required>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Email</label>
+    <input name="email" class="form-control"
+           value="{{ customer.email if customer else '' }}">
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Phone</label>
+    <input name="phone" class="form-control"
+           value="{{ customer.phone if customer else '' }}">
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Address line 1</label>
+    <input name="address_line1" class="form-control"
+           value="{{ customer.address_line1 if customer else '' }}">
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Address line 2</label>
+    <input name="address_line2" class="form-control"
+           value="{{ customer.address_line2 if customer else '' }}">
+  </div>
+  <div class="mb-3">
+    <label class="form-label">City</label>
+    <input name="city" class="form-control"
+           value="{{ customer.city if customer else '' }}">
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Postcode</label>
+    <input name="postcode" class="form-control"
+           value="{{ customer.postcode if customer else '' }}">
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Country</label>
+    <input name="country" class="form-control"
+           value="{{ customer.country if customer else '' }}">
+  </div>
+  <button class="btn btn-primary">Save</button>
+</form>
+{% endblock %}
