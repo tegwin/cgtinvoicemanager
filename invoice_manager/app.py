@@ -5,6 +5,8 @@ import csv
 import io
 from secrets import token_hex
 
+import requests
+
 from flask import (
     Flask, render_template, request, redirect, url_for,
     flash, jsonify, abort, session
@@ -195,6 +197,10 @@ class Settings(db.Model):
                                  nullable=False,
                                  default=Decimal("0.00"))
 
+    # Outbound webhook config
+    outbound_webhook_url = db.Column(db.String(500))
+    outbound_webhook_enabled = db.Column(db.Boolean, nullable=False, default=False)
+
 
 class APIKey(db.Model):
     __tablename__ = "api_keys"
@@ -263,6 +269,33 @@ def determine_tax_rate_for_customer(customer):
     return customer.tax_rate
 
 
+def send_outbound_webhook(event_type: str, payload: dict):
+    """
+    Send a JSON webhook to the configured outbound_webhook_url.
+    Does nothing if not enabled or URL blank.
+    Never raises back to the caller – errors are just printed.
+    """
+    settings = get_settings()
+    if not settings.outbound_webhook_enabled or not settings.outbound_webhook_url:
+        return
+
+    body = {
+        "event": event_type,
+        "data": payload,
+        "sent_at": datetime.utcnow().isoformat() + "Z",
+    }
+
+    try:
+        resp = requests.post(
+            settings.outbound_webhook_url,
+            json=body,
+            timeout=5,
+        )
+        print(f"[webhook] Sent {event_type} → {settings.outbound_webhook_url} ({resp.status_code})")
+    except Exception as e:
+        print(f"[webhook] Error sending {event_type} → {settings.outbound_webhook_url}: {e}")
+
+
 # -----------------------
 # Web UI routes
 # -----------------------
@@ -278,13 +311,20 @@ def index():
 def settings_view():
     settings = get_settings()
     if request.method == "POST":
+        # Default tax rate
         rate_str = (request.form.get("default_tax_rate") or "").strip()
         try:
             settings.default_tax_rate = Decimal(rate_str or "0")
-            db.session.commit()
-            flash("Settings saved", "success")
         except Exception:
             flash("Invalid tax rate", "danger")
+            return redirect(url_for("settings_view"))
+
+        # Outbound webhook config
+        settings.outbound_webhook_enabled = bool(request.form.get("outbound_webhook_enabled"))
+        settings.outbound_webhook_url = (request.form.get("outbound_webhook_url") or "").strip() or None
+
+        db.session.commit()
+        flash("Settings saved", "success")
         return redirect(url_for("settings_view"))
     return render_template("settings.html", settings=settings)
 
@@ -460,6 +500,8 @@ def edit_invoice(invoice_id):
 
 
 def handle_invoice_form(invoice=None):
+    is_new = invoice is None  # track whether it's a new invoice
+
     customer_id = request.form.get("customer_id")
     issue_date_str = request.form.get("issue_date")
     due_date_str = request.form.get("due_date")
@@ -522,6 +564,14 @@ def handle_invoice_form(invoice=None):
 
     invoice.recalc_totals()
     db.session.commit()
+
+    # 🔔 outbound webhook
+    try:
+        event_name = "invoice.created" if is_new else "invoice.updated"
+        send_outbound_webhook(event_name, invoice.to_dict())
+    except Exception:
+        pass
+
     flash("Invoice saved", "success")
     return redirect(url_for("invoice_detail", invoice_id=invoice.id))
 
@@ -558,6 +608,18 @@ def add_payment(invoice_id):
     db.session.add(payment)
     invoice.recalc_totals()
     db.session.commit()
+
+    # 🔔 outbound webhook
+    try:
+        send_outbound_webhook(
+            "payment.recorded",
+            {
+                "invoice": invoice.to_dict(include_items=False),
+                "payment": payment.to_dict(),
+            },
+        )
+    except Exception:
+        pass
 
     flash("Payment added", "success")
     return redirect(url_for("invoice_detail", invoice_id=invoice.id))

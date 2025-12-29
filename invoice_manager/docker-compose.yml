@@ -1,32 +1,41 @@
-version: "3.9"
-
 services:
-  db:
-    image: mysql:8.0
-    container_name: invoice_db
-    restart: always
-    environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: invoicemanager
-      MYSQL_USER: invoicer
-      MYSQL_PASSWORD: invoicerpassword
-    ports:
-      - "3306:3306"
-    volumes:
-      - db_data:/var/lib/mysql
-
   web:
-    build: .
+    image: invoice_manager-web
     container_name: invoice_web
-    restart: always
+    build: .
+    restart: unless-stopped
     depends_on:
       - db
     environment:
-      DATABASE_URL: "mysql+pymysql://invoicer:invoicerpassword@db/invoicemanager"
-      SECRET_KEY: "another-secret-key"
-      FLASK_APP: "app.py"
+      # Flask
+      - FLASK_APP=app.py
+      - FLASK_RUN_HOST=0.0.0.0
+
+      # DB connection used inside app.py
+      # Make sure these creds match the db section below
+      - DATABASE_URL=mysql+pymysql://invoicer:invoicerpassword@invoice_db/invoicemanager
+
+      # Change this in production
+      - SECRET_KEY=change-me-to-something-random
     ports:
+      # HostPort:ContainerPort
       - "5000:5000"
 
+  db:
+    image: mysql:8.0
+    container_name: invoice_db
+    restart: unless-stopped
+    environment:
+      - MYSQL_DATABASE=invoicemanager
+      - MYSQL_USER=invoicer
+      - MYSQL_PASSWORD=invoicerpassword
+      - MYSQL_ROOT_PASSWORD=rootpassword
+    volumes:
+      # Persist database data
+      - invoice_manager_db_data:/var/lib/mysql
+    ports:
+      # Optional: expose MySQL on host for external tools
+      - "3306:3306"
+
 volumes:
-  db_data:
+  invoice_manager_db_data:
