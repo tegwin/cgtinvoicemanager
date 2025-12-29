@@ -7,19 +7,12 @@ services:
     depends_on:
       - db
     environment:
-      # Flask
       - FLASK_APP=app.py
       - FLASK_RUN_HOST=0.0.0.0
-
-      # DB connection used inside app.py
-      # Make sure these creds match the db section below
       - DATABASE_URL=mysql+pymysql://invoicer:invoicerpassword@invoice_db/invoicemanager
-
-      # Change this in production
       - SECRET_KEY=change-me-to-something-random
-    ports:
-      # HostPort:ContainerPort
-      - "5000:5000"
+    expose:
+      - "5000"     # internal only, Caddy will proxy to this
 
   db:
     image: mysql:8.0
@@ -31,11 +24,28 @@ services:
       - MYSQL_PASSWORD=invoicerpassword
       - MYSQL_ROOT_PASSWORD=rootpassword
     volumes:
-      # Persist database data
       - invoice_manager_db_data:/var/lib/mysql
+    # You can expose this if you want external DB access. Not required for the app to work.
+    # ports:
+    #   - "3306:3306"
+
+  caddy:
+    image: caddy:2
+    container_name: invoice_caddy
+    restart: unless-stopped
+    depends_on:
+      - web
     ports:
-      # Optional: expose MySQL on host for external tools
-      - "3306:3306"
+      - "80:80"
+      - "443:443"
+    volumes:
+      # assuming compose file is in /opt/cgtinvoicemanager/invoice_manager
+      # and Caddyfile is in /opt/cgtinvoicemanager/Caddyfile
+      - ../Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
 
 volumes:
   invoice_manager_db_data:
+  caddy_data:
+  caddy_config:
