@@ -8,18 +8,32 @@
 </head>
 <body>
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
-  <div class="container-fluid">
-    <a class="navbar-brand" href="{{ url_for('index') }}">Invoice Manager</a>
-    <div>
-      <a class="nav-link d-inline text-light" href="{{ url_for('list_customers') }}">Customers</a>
-      <a class="nav-link d-inline text-light" href="{{ url_for('list_invoices') }}">Invoices</a>
-      <a class="nav-link d-inline text-light" href="{{ url_for('import_customers') }}">Import Customers</a>
-      <a class="nav-link d-inline text-light" href="{{ url_for('import_invoices') }}">Import Invoices</a>
-      <a class="nav-link d-inline text-light" href="{{ url_for('settings_view') }}">Settings</a>
-      <a class="nav-link d-inline text-light" href="{{ url_for('api_keys_list') }}">API Keys</a>
-      <a class="nav-link d-inline text-light" href="{{ url_for('api_docs') }}">API Docs</a>
-    </div>
-  </div>
+<div class="collapse navbar-collapse">
+  <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+    <li class="nav-item">
+      <a class="nav-link text-light" href="{{ url_for('list_customers') }}">Customers</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link text-light" href="{{ url_for('list_invoices') }}">Invoices</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link text-light" href="{{ url_for('import_customers') }}">Import Customers</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link text-light" href="{{ url_for('import_invoices') }}">Import Invoices</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link text-light" href="{{ url_for('settings_view') }}">Settings</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link text-light" href="{{ url_for('api_keys_list') }}">API Keys</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link text-light" href="{{ url_for('api_docs') }}">API Docs</a>
+    </li>
+  </ul>
+</div>
+
 </nav>
 
 <div class="container">
