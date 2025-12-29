@@ -22,7 +22,7 @@
             <select name="customer_id" class="form-select" id="customer-select" required>
               <option value="">Select customer...</option>
               {% for c in customers %}
-                {% set effective_tax = (c.tax_rate if not c.use_default_tax and c.tax_rate is not none else settings.default_tax_rate) %}
+                {% set effective_tax = (c.tax_rate if (not c.use_default_tax and c.tax_rate is not none) else settings.default_tax_rate) %}
                 <option value="{{ c.id }}"
                         data-tax-rate="{{ effective_tax or 0 }}"
                         {% if invoice and invoice.customer_id == c.id %}selected{% endif %}>
@@ -33,15 +33,18 @@
           </div>
           <div class="col-md-3">
             <label class="form-label">Issue date</label>
-            <input type="date" name="issue_date" class="form-control"
-                   value="{{ (invoice.issue_date if invoice else None) or (now().date() if false else '') }}"
-                   {% if invoice %}value="{{ invoice.issue_date }}"{% endif %}
+            <input type="date"
+                   name="issue_date"
+                   class="form-control"
+                   value="{{ invoice.issue_date if invoice else '' }}"
                    required>
           </div>
           <div class="col-md-3">
             <label class="form-label">Due date</label>
-            <input type="date" name="due_date" class="form-control"
-                   {% if invoice %}value="{{ invoice.due_date }}"{% endif %}
+            <input type="date"
+                   name="due_date"
+                   class="form-control"
+                   value="{{ invoice.due_date if invoice else '' }}"
                    required>
           </div>
         </div>
@@ -64,7 +67,9 @@
           </div>
         </div>
 
-        <input type="hidden" id="tax-rate-input" value="{{ (invoice.tax_rate if invoice and invoice.tax_rate is not none else settings.default_tax_rate) or 0 }}">
+        <input type="hidden"
+               id="tax-rate-input"
+               value="{{ (invoice.tax_rate if invoice and invoice.tax_rate is not none else settings.default_tax_rate) or 0 }}">
 
         <div class="mb-2 d-flex justify-content-between align-items-center">
           <h5 class="mb-0">Line items</h5>
@@ -185,7 +190,9 @@
       </div>
       <div class="d-flex justify-content-between mb-2">
         <span class="text-muted">
-          VAT (<span id="summary-tax-rate">{{ (invoice.tax_rate if invoice and invoice.tax_rate is not none else settings.default_tax_rate) or 0 }}</span>%)
+          VAT (<span id="summary-tax-rate">
+            {{ (invoice.tax_rate if invoice and invoice.tax_rate is not none else settings.default_tax_rate) or 0 }}
+          </span>%)
         </span>
         <span id="summary-tax">0.00</span>
       </div>
@@ -205,17 +212,6 @@
 {% block scripts %}
 <script>
 (function() {
-  const products = [
-    {% for p in products %}
-    {
-      id: {{ p.id }},
-      name: "{{ p.name|e }}",
-      description: "{{ (p.description or '')|e }}",
-      price: {{ p.unit_price or 0 }}
-    }{% if not loop.last %},{% endif %}
-    {% endfor %}
-  ];
-
   function recalcTotals() {
     let subtotal = 0;
     document.querySelectorAll("#items-table tbody tr.item-row").forEach(row => {
