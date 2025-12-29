@@ -1,51 +1,53 @@
 services:
-  web:
-    image: invoice_manager-web
-    container_name: invoice_web
-    build: .
-    restart: unless-stopped
-    depends_on:
-      - db
-    environment:
-      - FLASK_APP=app.py
-      - FLASK_RUN_HOST=0.0.0.0
-      - DATABASE_URL=mysql+pymysql://invoicer:invoicerpassword@invoice_db/invoicemanager
-      - SECRET_KEY=change-me-to-something-random
-    expose:
-      - "5000"     # internal only, Caddy will proxy to this
-
   db:
     image: mysql:8.0
     container_name: invoice_db
-    restart: unless-stopped
+    restart: always
     environment:
-      - MYSQL_DATABASE=invoicemanager
-      - MYSQL_USER=invoicer
-      - MYSQL_PASSWORD=invoicerpassword
-      - MYSQL_ROOT_PASSWORD=rootpassword
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: invoicemanager
+      MYSQL_USER: invoicemgr
+      MYSQL_PASSWORD: invoicemgr
     volumes:
-      - invoice_manager_db_data:/var/lib/mysql
-    # You can expose this if you want external DB access. Not required for the app to work.
-    # ports:
-    #   - "3306:3306"
+      - db_data:/var/lib/mysql
+    networks:
+      - invoice_net
+
+  web:
+    build: .
+    container_name: invoice_web
+    restart: always
+    environment:
+      # Use the db service / container name as host
+      DATABASE_URL: mysql+pymysql://root:password@invoice_db/invoicemanager
+      SECRET_KEY: change-this-secret
+      FLASK_ENV: production
+    depends_on:
+      - db
+    networks:
+      - invoice_net
 
   caddy:
     image: caddy:2
     container_name: invoice_caddy
-    restart: unless-stopped
-    depends_on:
-      - web
+    restart: always
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      # assuming compose file is in /opt/cgtinvoicemanager/invoice_manager
-      # and Caddyfile is in /opt/cgtinvoicemanager/Caddyfile
-      - ../Caddyfile:/etc/caddy/Caddyfile
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    depends_on:
+      - web
+    networks:
+      - invoice_net
 
 volumes:
-  invoice_manager_db_data:
+  db_data:
   caddy_data:
   caddy_config:
+
+networks:
+  invoice_net:
+    driver: bridge

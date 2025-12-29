@@ -1,0 +1,3 @@
+invoice.sondelaconsulting.com {
+    reverse_proxy web:5000
+}
