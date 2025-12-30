@@ -24,7 +24,7 @@
     referrerpolicy="no-referrer"
   />
 
-  <style>
+   <style>
     :root {
       --bg-main: #020617;
       --bg-card: #050b18;
@@ -223,8 +223,15 @@
       color: #fef3c7;
     }
 
+    /* Make “muted” text easier to read everywhere */
     .text-muted-soft {
-      color: var(--text-muted);
+      color: #e5e7eb;
+    }
+
+    /* And force Bootstrap's text-muted to be white-ish inside cards */
+    .card-dark .text-muted,
+    .card-dark-soft .text-muted {
+      color: #e5e7eb !important;
     }
 
     .nav-link.active-pill {
@@ -275,6 +282,7 @@
       }
     }
   </style>
+
 
   {% block head %}{% endblock %}
 </head>

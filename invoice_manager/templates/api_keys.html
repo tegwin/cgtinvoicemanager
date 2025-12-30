@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+  <div>
+    <h2 class="mb-0">API Keys</h2>
+    <div class="section-subtitle">
+      Manage API access for integrations and automations.
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-4">
+    <div class="card-dark p-3 p-md-4">
+      <h5 class="mb-2">Create API key</h5>
+      <p class="section-subtitle mb-3">
+        Name the key and choose its permissions. The full key value is shown only once when created.
+      </p>
+      <form method="post">
+        <div class="mb-3">
+          <label class="form-label">Key name</label>
+          <input type="text" name="name" class="form-control"
+                 placeholder="e.g. n8n, Zapier, backend integration" required>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label d-block">Permissions</label>
+          <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" name="perm_read" id="perm_read" checked>
+            <label class="form-check-label" for="perm_read">
+              Read (list & view data)
+            </label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="perm_write" id="perm_write">
+            <label class="form-check-label" for="perm_write">
+              Write (create, update, delete)
+            </label>
+          </div>
+          <div class="form-text text-muted-soft mt-1">
+            At least read will be enabled even if you uncheck everything.
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100">
+          <i class="fa-solid fa-key me-1"></i> Generate API key
+        </button>
+      </form>
+
+      {% if new_key_plain %}
+      <hr class="my-3" style="border-color: rgba(148, 163, 184, 0.25);">
+      <div class="alert-soft p-3">
+        <div class="fw-semibold mb-1">
+          New key generated
+        </div>
+        <div class="small mb-2">
+          Copy this key now – it will not be shown again.
+        </div>
+        <div class="small" style="word-break: break-all;">
+          <code>{{ new_key_plain }}</code>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-lg-8">
+    <div class="card-dark p-3 p-md-4">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h5 class="mb-0">Your API keys</h5>
+      </div>
+
+      {% if api_keys %}
+      <div class="table-responsive">
+        <table class="table table-dark align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th style="width: 26%;">Key ID</th>
+              <th>Permissions</th>
+              <th>Created</th>
+              <th>Last used</th>
+              <th>Status</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for k in api_keys %}
+            <tr>
+              <td>{{ k.name }}</td>
+              <td class="small text-muted-soft">
+                {{ k.key_id }}
+              </td>
+              <td>
+                {% if k.can_read %}
+                  <span class="badge badge-pill badge-soft-blue me-1">read</span>
+                {% endif %}
+                {% if k.can_write %}
+                  <span class="badge badge-pill badge-soft-green">write</span>
+                {% endif %}
+              </td>
+              <td class="small text-muted-soft">
+                {{ k.created_at.strftime("%Y-%m-%d") if k.created_at else "—" }}
+              </td>
+              <td class="small text-muted-soft">
+                {% if k.last_used_at %}
+                  {{ k.last_used_at.strftime("%Y-%m-%d") }}
+                {% else %}
+                  Never
+                {% endif %}
+              </td>
+              <td>
+                {% if k.active %}
+                  <span class="badge badge-pill badge-soft-green">Active</span>
+                {% else %}
+                  <span class="badge badge-pill badge-soft-red">Revoked</span>
+                {% endif %}
+              </td>
+              <td class="text-end">
+                <div class="btn-group btn-group-sm" role="group">
+                  {% if k.active %}
+                  <form method="post" action="{{ url_for('api_key_revoke', key_id=k.id) }}" class="d-inline">
+                    <button type="submit" class="btn btn-outline-light btn-sm">
+                      Revoke
+                    </button>
+                  </form>
+                  {% endif %}
+                  <form method="post" action="{{ url_for('api_key_delete', key_id=k.id) }}" class="d-inline ms-1">
+                    <button type="submit" class="btn btn-outline-danger btn-sm"
+                            onclick="return confirm('Delete this API key permanently?');">
+                      Delete
+                    </button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="section-subtitle">
+        You don’t have any API keys yet. Create one using the form on the left.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

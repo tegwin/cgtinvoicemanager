@@ -1,34 +1,46 @@
 import os
 import json
-from datetime import datetime, date, timedelta
-from decimal import Decimal
 import csv
 import io
-from secrets import token_hex
+import secrets
+import hashlib
+from datetime import datetime, date
+from decimal import Decimal
 
 import requests
-
 from flask import (
-    Flask, render_template, request, redirect, url_for,
-    flash, jsonify, abort, session, send_file
+    Flask,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    flash,
+    jsonify,
+    abort,
+    send_file,
 )
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import (
-    LoginManager, UserMixin, login_user, logout_user,
-    login_required, current_user
+    LoginManager,
+    login_user,
+    logout_user,
+    current_user,
+    login_required,
+    UserMixin,
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 
-# -----------------------
-# Config & setup
-# -----------------------
+# -------------------------------------------------
+# App & config
+# -------------------------------------------------
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 
+# In Docker, DATABASE_URL will be set to mysql+pymysql://invoicemgr:invoicemgr@db/invoicemanager
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
     "DATABASE_URL",
-    "mysql+pymysql://invoicemgr:invoicemgr@db/invoicemanager"
+    "mysql+pymysql://invoicemgr:invoicemgr@db/invoicemanager",
 )
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
@@ -38,23 +50,81 @@ login_manager = LoginManager(app)
 login_manager.login_view = "login"
 
 
-# -----------------------
+# -------------------------------------------------
 # Models
-# -----------------------
+# -------------------------------------------------
 
-class User(UserMixin, db.Model):
+class User(db.Model, UserMixin):
     __tablename__ = "users"
 
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(255), unique=True, nullable=False)
+    username = db.Column(db.String(150), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
-    def set_password(self, password: str):
+    def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password: str) -> bool:
         return check_password_hash(self.password_hash, password)
+
+
+class Settings(db.Model):
+    __tablename__ = "settings"
+
+    id = db.Column(db.Integer, primary_key=True)
+    default_tax_rate = db.Column(db.Numeric(5, 2), nullable=False, default=Decimal("0.00"))
+
+    # Outbound webhook config
+    outbound_webhook_url = db.Column(db.String(500))
+    outbound_webhook_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    # Comma-separated list of event names: invoice.created, invoice.updated, payment.recorded
+    outbound_webhook_events = db.Column(db.String(255), nullable=False, default="")
+
+    # Branding
+    brand_name = db.Column(db.String(255))
+    logo_url = db.Column(db.String(500))
+
+    # Payment terms
+    payment_terms_days = db.Column(db.Integer, nullable=False, default=0)
+    use_global_payment_terms = db.Column(db.Boolean, nullable=False, default=False)
+
+    @classmethod
+    def load(cls):
+        settings = cls.query.get(1)
+        if not settings:
+            settings = cls(
+                id=1,
+                default_tax_rate=Decimal("0.00"),
+                outbound_webhook_enabled=False,
+                outbound_webhook_events="",
+                payment_terms_days=0,
+                use_global_payment_terms=False,
+            )
+            db.session.add(settings)
+            db.session.commit()
+        # Defensive: avoid NULL in NOT NULL column
+        changed = False
+        if settings.outbound_webhook_events is None:
+            settings.outbound_webhook_events = ""
+            changed = True
+        if settings.payment_terms_days is None:
+            settings.payment_terms_days = 0
+            changed = True
+        if settings.use_global_payment_terms is None:
+            settings.use_global_payment_terms = False
+            changed = True
+        if changed:
+            db.session.commit()
+        return settings
+
+    def selected_webhook_events(self):
+        if not self.outbound_webhook_events:
+            return set()
+        return {
+            e.strip()
+            for e in self.outbound_webhook_events.split(",")
+            if e.strip()
+        }
 
 
 class Customer(db.Model):
@@ -70,14 +140,15 @@ class Customer(db.Model):
     postcode = db.Column(db.String(50))
     country = db.Column(db.String(100))
 
-    # Tax settings
-    tax_rate = db.Column(db.Numeric(5, 2))  # percentage, e.g. 20.00
+    tax_rate = db.Column(db.Numeric(5, 2))
     use_default_tax = db.Column(db.Boolean, nullable=False, default=True)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(
-        db.DateTime, nullable=False,
-        default=datetime.utcnow, onupdate=datetime.utcnow
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
     )
 
     invoices = db.relationship("Invoice", back_populates="customer")
@@ -96,11 +167,14 @@ class Product(db.Model):
     active = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(
-        db.DateTime, nullable=False,
-        default=datetime.utcnow, onupdate=datetime.utcnow
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
     )
 
-    invoice_items = db.relationship("InvoiceItem", back_populates="product")
+    def __repr__(self):
+        return f"<Product {self.id} {self.name}>"
 
 
 class Invoice(db.Model):
@@ -112,34 +186,37 @@ class Invoice(db.Model):
     issue_date = db.Column(db.Date, nullable=False)
     due_date = db.Column(db.Date, nullable=True)
     status = db.Column(
-        db.Enum("draft", "sent", "paid", "overdue", "cancelled",
-                name="invoice_status"),
+        db.Enum("draft", "sent", "paid", "overdue", "cancelled", name="invoice_status"),
         nullable=False,
-        default="draft"
+        default="draft",
     )
     notes = db.Column(db.Text)
 
-    # Money
     subtotal_amount = db.Column(db.Numeric(10, 2), nullable=False, default=0)
-    tax_rate = db.Column(db.Numeric(5, 2))  # percentage e.g. 20.00
+    tax_rate = db.Column(db.Numeric(5, 2))
     tax_amount = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     total_amount = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     balance_due = db.Column(db.Numeric(10, 2), nullable=False, default=0)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(
-        db.DateTime, nullable=False,
-        default=datetime.utcnow, onupdate=datetime.utcnow
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
     )
 
     customer = db.relationship("Customer", back_populates="invoices")
     items = db.relationship(
-        "InvoiceItem", back_populates="invoice",
-        cascade="all, delete-orphan"
+        "InvoiceItem",
+        back_populates="invoice",
+        cascade="all, delete-orphan",
+        lazy="joined",
     )
     payments = db.relationship(
-        "Payment", back_populates="invoice",
-        cascade="all, delete-orphan"
+        "Payment",
+        back_populates="invoice",
+        cascade="all, delete-orphan",
     )
 
     def recalc_totals(self):
@@ -158,7 +235,10 @@ class Invoice(db.Model):
 
         if self.balance_due <= 0 and total > 0:
             self.status = "paid"
-        elif self.due_date and date.today() > self.due_date and self.status not in ("paid", "cancelled"):
+        elif self.due_date and date.today() > self.due_date and self.status not in (
+            "paid",
+            "cancelled",
+        ):
             self.status = "overdue"
         else:
             if self.status not in ("cancelled", "paid"):
@@ -170,7 +250,7 @@ class Invoice(db.Model):
             "invoice_number": self.invoice_number,
             "customer_id": self.customer_id,
             "customer_name": self.customer.name if self.customer else None,
-            "issue_date": self.issue_date.isoformat() if self.issue_date else None,
+            "issue_date": self.issue_date.isoformat(),
             "due_date": self.due_date.isoformat() if self.due_date else None,
             "status": self.status,
             "notes": self.notes,
@@ -179,8 +259,8 @@ class Invoice(db.Model):
             "tax_amount": float(self.tax_amount),
             "total_amount": float(self.total_amount),
             "balance_due": float(self.balance_due),
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         }
         if include_items:
             data["items"] = [item.to_dict() for item in self.items]
@@ -201,13 +281,13 @@ class InvoiceItem(db.Model):
     line_total = db.Column(db.Numeric(10, 2), nullable=False)
 
     invoice = db.relationship("Invoice", back_populates="items")
-    product = db.relationship("Product", back_populates="invoice_items")
+    product = db.relationship("Product")
 
     def to_dict(self):
         return {
             "id": self.id,
-            "invoice_id": self.invoice_id,
             "product_id": self.product_id,
+            "product_name": self.product.name if self.product else None,
             "description": self.description,
             "quantity": float(self.quantity),
             "unit_price": float(self.unit_price),
@@ -236,78 +316,46 @@ class Payment(db.Model):
             "payment_date": self.payment_date.isoformat(),
             "method": self.method,
             "external_reference": self.external_reference,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at": self.created_at.isoformat(),
         }
 
 
-class Settings(db.Model):
-    __tablename__ = "settings"
-
-    id = db.Column(db.Integer, primary_key=True)
-    default_tax_rate = db.Column(db.Numeric(5, 2),
-                                 nullable=False,
-                                 default=Decimal("0.00"))
-
-    # Outbound webhook config
-    outbound_webhook_url = db.Column(db.String(500))
-    outbound_webhook_enabled = db.Column(db.Boolean, nullable=False, default=False)
-    # JSON array of event names, stored as text, never NULL
-    outbound_webhook_events = db.Column(db.Text, nullable=False, default="[]")
-
-    # Branding / UI
-    brand_name = db.Column(db.String(255))
-    logo_url = db.Column(db.String(500))
-
-    # Payment terms
-    payment_terms_days = db.Column(db.Integer, nullable=True)
-    use_global_payment_terms = db.Column(db.Boolean, nullable=False, default=True)
-
-
-class APIKey(db.Model):
+class ApiKey(db.Model):
     __tablename__ = "api_keys"
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
-    key = db.Column(db.String(64), unique=True, nullable=False)
+
+    # Short ID used in UI
+    key_id = db.Column(db.String(32), unique=True, nullable=False)
+    # SHA256 hash of the actual secret
+    key_hash = db.Column(db.String(64), unique=True, nullable=False)
+
+    can_read = db.Column(db.Boolean, nullable=False, default=True)
+    can_write = db.Column(db.Boolean, nullable=False, default=False)
     active = db.Column(db.Boolean, nullable=False, default=True)
+
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     last_used_at = db.Column(db.DateTime)
 
 
-# -----------------------
+# -------------------------------------------------
 # Login manager
-# -----------------------
+# -------------------------------------------------
 
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
 
-# -----------------------
-# Helpers
-# -----------------------
-
-def generate_api_key_value():
-    return token_hex(32)
-
-
-def require_api_key():
-    key_value = request.headers.get("X-API-Key") or request.args.get("api_key")
-    if not key_value:
-        abort(401, description="Missing API key")
-    api_key = APIKey.query.filter_by(key=key_value, active=True).first()
-    if not api_key:
-        abort(401, description="Invalid or inactive API key")
-    api_key.last_used_at = datetime.utcnow()
-    db.session.commit()
-    return api_key
-
+# -------------------------------------------------
+# Helper functions
+# -------------------------------------------------
 
 def generate_invoice_number():
     today_str = date.today().strftime("%Y%m%d")
     last = (
-        Invoice.query
-        .filter(Invoice.invoice_number.like(f"INV-{today_str}-%"))
+        Invoice.query.filter(Invoice.invoice_number.like(f"INV-{today_str}-%"))
         .order_by(Invoice.id.desc())
         .first()
     )
@@ -321,36 +369,8 @@ def generate_invoice_number():
     return f"INV-{today_str}-{seq:04d}"
 
 
-def get_settings():
-    settings = Settings.query.get(1)
-    if not settings:
-        settings = Settings(
-            id=1,
-            default_tax_rate=Decimal("0.00"),
-            outbound_webhook_url=None,
-            outbound_webhook_enabled=False,
-            outbound_webhook_events="[]",
-            brand_name=None,
-            logo_url=None,
-            payment_terms_days=30,
-            use_global_payment_terms=True,
-        )
-        db.session.add(settings)
-        db.session.commit()
-    # Ensure outbound_webhook_events is never None
-    if settings.outbound_webhook_events is None:
-        settings.outbound_webhook_events = "[]"
-        db.session.commit()
-    return settings
-
-
-@app.context_processor
-def inject_settings():
-    return {"settings": get_settings()}
-
-
-def determine_tax_rate_for_customer(customer):
-    settings = get_settings()
+def determine_tax_rate_for_customer(customer: Customer | None):
+    settings = Settings.load()
     if customer is None:
         return settings.default_tax_rate
     if customer.use_default_tax or customer.tax_rate is None:
@@ -358,41 +378,23 @@ def determine_tax_rate_for_customer(customer):
     return customer.tax_rate
 
 
-def apply_global_payment_terms(issue_date: date, due_date: date | None) -> date | None:
-    """
-    If global payment terms are enabled and due_date is not provided,
-    calculate due_date = issue_date + payment_terms_days (if set).
-    """
-    settings = get_settings()
-    if not settings.use_global_payment_terms:
-        return due_date
-    if due_date:
-        return due_date
-    if settings.payment_terms_days:
-        return issue_date + timedelta(days=settings.payment_terms_days)
-    return due_date
+def apply_global_payment_terms(issue_date: date, settings: Settings) -> date | None:
+    if not settings.use_global_payment_terms or not settings.payment_terms_days:
+        return None
+    return issue_date + timedelta(days=int(settings.payment_terms_days))
 
 
 def send_outbound_webhook(event_type: str, payload: dict):
     """
-    Send a JSON webhook to the configured outbound_webhook_url.
-    Only fires if:
-      - webhooks are enabled
-      - URL is set
-      - event_type is in outbound_webhook_events
-    Never raises back to the caller – errors are just printed.
+    Send JSON webhook if enabled and event selected.
     """
-    settings = get_settings()
+    settings = Settings.load()
     if not settings.outbound_webhook_enabled or not settings.outbound_webhook_url:
         return
 
-    try:
-        events = json.loads(settings.outbound_webhook_events or "[]")
-    except Exception:
-        events = []
-
-    if events and event_type not in events:
-        # Specific events selected, and this one isn't in them
+    selected = settings.selected_webhook_events()
+    # If some events are ticked and this one isn't, skip
+    if selected and event_type not in selected:
         return
 
     body = {
@@ -408,75 +410,50 @@ def send_outbound_webhook(event_type: str, payload: dict):
             timeout=5,
         )
         print(
-            f"[webhook] Sent {event_type} → {settings.outbound_webhook_url} "
+            f"[webhook] Sent {event_type} -> {settings.outbound_webhook_url} "
             f"({resp.status_code})"
         )
     except Exception as e:
-        print(f"[webhook] Error sending {event_type} → {settings.outbound_webhook_url}: {e}")
+        print(f"[webhook] Error sending {event_type}: {e}")
 
 
-# API serializers
+# ----- API key auth helpers -----
 
-def customer_to_dict(customer):
-    if not customer:
-        return None
-    return {
-        "id": customer.id,
-        "name": customer.name,
-        "email": customer.email,
-        "phone": customer.phone,
-        "address_line1": customer.address_line1,
-        "address_line2": customer.address_line2,
-        "city": customer.city,
-        "postcode": customer.postcode,
-        "country": customer.country,
-        "use_default_tax": customer.use_default_tax,
-        "tax_rate": float(customer.tax_rate) if customer.tax_rate is not None else None,
-        "created_at": customer.created_at.isoformat() if customer.created_at else None,
-        "updated_at": customer.updated_at.isoformat() if customer.updated_at else None,
-    }
+def _find_api_key(raw_value: str) -> ApiKey | None:
+    key_hash = hashlib.sha256(raw_value.encode("utf-8")).hexdigest()
+    return ApiKey.query.filter_by(key_hash=key_hash, active=True).first()
 
 
-def product_to_dict(product):
-    if not product:
-        return None
-    return {
-        "id": product.id,
-        "name": product.name,
-        "description": product.description,
-        "unit_price": float(product.unit_price),
-        "active": product.active,
-        "created_at": product.created_at.isoformat() if product.created_at else None,
-        "updated_at": product.updated_at.isoformat() if product.updated_at else None,
-    }
+def require_api_key(write: bool = False) -> ApiKey:
+    raw = request.headers.get("X-API-Key") or request.args.get("api_key")
+    if not raw:
+        abort(401, description="Missing API key")
+
+    api_key = _find_api_key(raw)
+    if not api_key:
+        abort(401, description="Invalid or inactive API key")
+
+    if write and not api_key.can_write:
+        abort(403, description="API key does not have write permission")
+
+    api_key.last_used_at = datetime.utcnow()
+    db.session.commit()
+    return api_key
 
 
-def payment_to_dict(payment):
-    if not payment:
-        return None
-    return {
-        "id": payment.id,
-        "invoice_id": payment.invoice_id,
-        "amount": float(payment.amount),
-        "payment_date": payment.payment_date.isoformat(),
-        "method": payment.method,
-        "external_reference": payment.external_reference,
-        "created_at": payment.created_at.isoformat() if payment.created_at else None,
-    }
+# -------------------------------------------------
+# Context processors
+# -------------------------------------------------
+
+@app.context_processor
+def inject_settings_and_datetime():
+    settings = Settings.load()
+    return {"settings": settings, "datetime": datetime}
 
 
-# -----------------------
-# Web UI routes
-# -----------------------
-
-@app.route("/")
-def index():
-    if not current_user.is_authenticated:
-        return redirect(url_for("login"))
-    return redirect(url_for("list_invoices"))
-
-
-# ----- Auth -----
+# -------------------------------------------------
+# Auth routes
+# -------------------------------------------------
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -486,13 +463,16 @@ def login():
     if request.method == "POST":
         username = (request.form.get("username") or "").strip()
         password = request.form.get("password") or ""
+
         user = User.query.filter_by(username=username).first()
         if not user or not user.check_password(password):
             flash("Invalid username or password", "danger")
             return render_template("login.html")
+
         login_user(user)
-        next_url = request.args.get("next") or url_for("list_invoices")
-        return redirect(next_url)
+        flash("Logged in", "success")
+        next_url = request.args.get("next")
+        return redirect(next_url or url_for("list_invoices"))
 
     return render_template("login.html")
 
@@ -501,158 +481,170 @@ def login():
 @login_required
 def logout():
     logout_user()
+    flash("Logged out", "success")
     return redirect(url_for("login"))
 
 
-# ----- Settings -----
+# -------------------------------------------------
+# Basic navigation
+# -------------------------------------------------
+
+@app.route("/")
+@login_required
+def index():
+    return redirect(url_for("list_invoices"))
+
+
+# -------------------------------------------------
+# Settings & API docs
+# -------------------------------------------------
 
 @app.route("/settings", methods=["GET", "POST"])
 @login_required
 def settings_view():
-    settings = get_settings()
+    settings = Settings.load()
 
     if request.method == "POST":
-        # Brand
-        settings.brand_name = (request.form.get("brand_name") or "").strip() or None
-        settings.logo_url = (request.form.get("logo_url") or "").strip() or None
+        # General
+        brand_name = (request.form.get("brand_name") or "").strip() or None
+        logo_url = (request.form.get("logo_url") or "").strip() or None
 
-        # Default tax rate
+        # Tax
         rate_str = (request.form.get("default_tax_rate") or "").strip()
         try:
             settings.default_tax_rate = Decimal(rate_str or "0")
         except Exception:
-            flash("Invalid tax rate", "danger")
+            flash("Invalid default tax rate", "danger")
             return redirect(url_for("settings_view"))
 
         # Payment terms
         use_global = bool(request.form.get("use_global_payment_terms"))
-        settings.use_global_payment_terms = use_global
-
         days_str = (request.form.get("payment_terms_days") or "").strip()
-        if days_str:
-            try:
-                settings.payment_terms_days = int(days_str)
-            except Exception:
-                flash("Invalid payment terms days", "danger")
-                return redirect(url_for("settings_view"))
-        else:
-            settings.payment_terms_days = None
+        try:
+            days_val = int(days_str or "0")
+        except Exception:
+            days_val = 0
 
-        # Webhook URL & enabled – only update if fields are present in the form.
-        # This avoids wiping webhook config when saving other settings.
-        if "outbound_webhook_url" in request.form:
-            url = (request.form.get("outbound_webhook_url") or "").strip()
-            settings.outbound_webhook_url = url or None
+        settings.use_global_payment_terms = use_global
+        settings.payment_terms_days = days_val
 
-        if "outbound_webhook_enabled" in request.form:
-            settings.outbound_webhook_enabled = True
-        elif "outbound_webhook_enabled_present" in request.form:
-            # Optional hidden field if you want an explicit "off" toggle
-            settings.outbound_webhook_enabled = False
-        # else: leave existing value as-is
+        settings.brand_name = brand_name
+        settings.logo_url = logo_url
 
-        if "outbound_webhook_events" in request.form:
-            events = request.form.getlist("outbound_webhook_events")
-            settings.outbound_webhook_events = json.dumps(events or [])
-        elif settings.outbound_webhook_events is None:
-            settings.outbound_webhook_events = "[]"
+        # Webhook
+        settings.outbound_webhook_enabled = bool(
+            request.form.get("outbound_webhook_enabled")
+        )
+        url_val = (request.form.get("outbound_webhook_url") or "").strip()
+        settings.outbound_webhook_url = url_val or None
+
+        selected_events = []
+        if request.form.get("event_invoice_created"):
+            selected_events.append("invoice.created")
+        if request.form.get("event_invoice_updated"):
+            selected_events.append("invoice.updated")
+        if request.form.get("event_payment_recorded"):
+            selected_events.append("payment.recorded")
+
+        # Store as comma-separated string, never None
+        settings.outbound_webhook_events = ",".join(selected_events)
 
         db.session.commit()
         flash("Settings saved", "success")
         return redirect(url_for("settings_view"))
 
-    try:
-        selected_events = json.loads(settings.outbound_webhook_events or "[]")
-    except Exception:
-        selected_events = []
-
-    available_events = [
-        ("invoice.created", "Invoice created"),
-        ("invoice.updated", "Invoice updated"),
-        ("payment.recorded", "Payment recorded"),
-    ]
-
+    selected = settings.selected_webhook_events()
     return render_template(
         "settings.html",
         settings=settings,
-        available_events=available_events,
-        selected_events=selected_events,
+        selected_events=selected,
     )
-
-
-# ----- API key management -----
-
-@app.route("/api-keys")
-@login_required
-def api_keys_list():
-    api_keys = APIKey.query.order_by(APIKey.created_at.desc()).all()
-    new_key_value = session.pop("new_api_key", None)
-    new_key_name = session.pop("new_api_key_name", None)
-    return render_template(
-        "api_keys_list.html",
-        api_keys=api_keys,
-        new_key_value=new_key_value,
-        new_key_name=new_key_name,
-    )
-
-
-@app.route("/api-keys/new", methods=["GET", "POST"])
-@login_required
-def api_keys_new():
-    if request.method == "POST":
-        name = (request.form.get("name") or "").strip()
-        key_value = (request.form.get("key") or "").strip()
-        if not name:
-            flash("Name is required", "danger")
-            return render_template("api_key_form.html", api_key=None)
-
-        if not key_value:
-            key_value = generate_api_key_value()
-
-        if APIKey.query.filter_by(key=key_value).first():
-            flash("That key value is already in use, please try again.", "danger")
-            return render_template("api_key_form.html", api_key=None)
-
-        api_key = APIKey(name=name, key=key_value, active=True)
-        db.session.add(api_key)
-        db.session.commit()
-
-        session["new_api_key"] = key_value
-        session["new_api_key_name"] = name
-
-        flash("API key created", "success")
-        return redirect(url_for("api_keys_list"))
-
-    return render_template("api_key_form.html", api_key=None)
-
-
-@app.route("/api-keys/<int:key_id>/toggle", methods=["POST"])
-@login_required
-def api_keys_toggle(key_id):
-    api_key = APIKey.query.get_or_404(key_id)
-    api_key.active = not api_key.active
-    db.session.commit()
-    flash("API key status updated", "success")
-    return redirect(url_for("api_keys_list"))
-
-
-@app.route("/api-keys/<int:key_id>/delete", methods=["POST"])
-@login_required
-def api_keys_delete(key_id):
-    api_key = APIKey.query.get_or_404(key_id)
-    db.session.delete(api_key)
-    db.session.commit()
-    flash("API key deleted", "success")
-    return redirect(url_for("api_keys_list"))
 
 
 @app.route("/api/docs")
 @login_required
 def api_docs():
-    return render_template("api_docs.html")
+    settings = Settings.load()
+    # You already have a nice html; this just renders it with settings + brand
+    return render_template("api_docs.html", settings=settings)
 
 
-# ----- Customers -----
+# -------------------------------------------------
+# API keys UI
+# -------------------------------------------------
+
+@app.route("/api-keys", methods=["GET", "POST"])
+@login_required
+def api_keys_list():
+    settings = Settings.load()
+    new_key_plain = None
+
+    if request.method == "POST":
+        name = (request.form.get("name") or "").strip()
+        if not name:
+            name = "Unnamed key"
+
+        can_read = bool(request.form.get("perm_read"))
+        can_write = bool(request.form.get("perm_write"))
+        if not can_read and not can_write:
+            can_read = True
+
+        raw_key = secrets.token_hex(32)
+        key_id = raw_key[:12]
+        key_hash = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+
+        api_key = ApiKey(
+            name=name,
+            key_id=key_id,
+            key_hash=key_hash,
+            can_read=can_read,
+            can_write=can_write,
+            active=True,
+            created_at=datetime.utcnow(),
+        )
+        db.session.add(api_key)
+        db.session.commit()
+
+        new_key_plain = raw_key
+        flash("New API key created. Copy it now – it won't be shown again.", "success")
+
+    api_keys = ApiKey.query.order_by(ApiKey.created_at.desc()).all()
+    return render_template(
+        "api_keys.html",
+        settings=settings,
+        api_keys=api_keys,
+        new_key_plain=new_key_plain,
+    )
+
+
+@app.route("/api-keys/<int:key_id>/revoke", methods=["POST"])
+@login_required
+def api_key_revoke(key_id):
+    Settings.load()  # just ensure exists
+    key = ApiKey.query.get_or_404(key_id)
+    if key.active:
+        key.active = False
+        db.session.commit()
+        flash("API key revoked.", "success")
+    else:
+        flash("API key was already revoked.", "info")
+    return redirect(url_for("api_keys_list"))
+
+
+@app.route("/api-keys/<int:key_id>/delete", methods=["POST"])
+@login_required
+def api_key_delete(key_id):
+    Settings.load()
+    key = ApiKey.query.get_or_404(key_id)
+    db.session.delete(key)
+    db.session.commit()
+    flash("API key deleted.", "success")
+    return redirect(url_for("api_keys_list"))
+
+
+# -------------------------------------------------
+# Customers
+# -------------------------------------------------
 
 @app.route("/customers")
 @login_required
@@ -665,7 +657,7 @@ def list_customers():
 @login_required
 def new_customer():
     if request.method == "POST":
-        name = request.form.get("name", "").strip()
+        name = (request.form.get("name") or "").strip()
         if not name:
             flash("Customer name is required", "danger")
             return render_template("customer_form.html", customer=None)
@@ -705,7 +697,7 @@ def edit_customer(customer_id):
     customer = Customer.query.get_or_404(customer_id)
 
     if request.method == "POST":
-        customer.name = request.form.get("name", "").strip()
+        customer.name = (request.form.get("name") or "").strip()
         customer.email = request.form.get("email")
         customer.phone = request.form.get("phone")
         customer.address_line1 = request.form.get("address_line1")
@@ -737,7 +729,9 @@ def edit_customer(customer_id):
     return render_template("customer_form.html", customer=customer)
 
 
-# ----- Products -----
+# -------------------------------------------------
+# Products
+# -------------------------------------------------
 
 @app.route("/products")
 @login_required
@@ -752,23 +746,21 @@ def new_product():
     if request.method == "POST":
         name = (request.form.get("name") or "").strip()
         if not name:
-            flash("Name is required", "danger")
+            flash("Product name is required", "danger")
             return render_template("product_form.html", product=None)
 
-        desc = request.form.get("description")
-        price_str = (request.form.get("unit_price") or "0").strip()
+        price_str = (request.form.get("unit_price") or "").strip()
         try:
-            price = Decimal(price_str)
+            unit_price = Decimal(price_str or "0")
         except Exception:
-            flash("Invalid unit price", "danger")
-            return render_template("product_form.html", product=None)
+            unit_price = Decimal("0.00")
 
         active = bool(request.form.get("active"))
 
         product = Product(
             name=name,
-            description=desc,
-            unit_price=price,
+            description=request.form.get("description"),
+            unit_price=unit_price,
             active=active,
         )
         db.session.add(product)
@@ -785,25 +777,20 @@ def edit_product(product_id):
     product = Product.query.get_or_404(product_id)
 
     if request.method == "POST":
-        name = (request.form.get("name") or "").strip()
-        if not name:
-            flash("Name is required", "danger")
-            return render_template("product_form.html", product=product)
+        product.name = (request.form.get("name") or "").strip()
+        product.description = request.form.get("description")
 
-        desc = request.form.get("description")
-        price_str = (request.form.get("unit_price") or "0").strip()
+        price_str = (request.form.get("unit_price") or "").strip()
         try:
-            price = Decimal(price_str)
+            product.unit_price = Decimal(price_str or "0")
         except Exception:
-            flash("Invalid unit price", "danger")
+            product.unit_price = Decimal("0.00")
+
+        product.active = bool(request.form.get("active"))
+
+        if not product.name:
+            flash("Product name is required", "danger")
             return render_template("product_form.html", product=product)
-
-        active = bool(request.form.get("active"))
-
-        product.name = name
-        product.description = desc
-        product.unit_price = price
-        product.active = active
 
         db.session.commit()
         flash("Product updated", "success")
@@ -812,24 +799,42 @@ def edit_product(product_id):
     return render_template("product_form.html", product=product)
 
 
-# ----- Invoices -----
+@app.route("/products/<int:product_id>/toggle", methods=["POST"])
+@login_required
+def toggle_product(product_id):
+    product = Product.query.get_or_404(product_id)
+    product.active = not product.active
+    db.session.commit()
+    flash("Product status updated", "success")
+    return redirect(url_for("list_products"))
+
+
+# -------------------------------------------------
+# Invoices
+# -------------------------------------------------
 
 @app.route("/invoices")
 @login_required
 def list_invoices():
-    status_filter = request.args.get("status", "open")
-    query = Invoice.query
+    status_filter = request.args.get("status") or "open"
+    query = Invoice.query.join(Customer).order_by(Invoice.created_at.desc())
 
     if status_filter == "open":
         query = query.filter(Invoice.status.in_(["draft", "sent", "overdue"]))
-    elif status_filter in ["draft", "sent", "paid", "overdue", "cancelled"]:
-        query = query.filter(Invoice.status == status_filter)
+    elif status_filter == "draft":
+        query = query.filter(Invoice.status == "draft")
+    elif status_filter == "sent":
+        query = query.filter(Invoice.status == "sent")
+    elif status_filter == "overdue":
+        query = query.filter(Invoice.status == "overdue")
+    elif status_filter == "paid":
+        query = query.filter(Invoice.status == "paid")
 
-    invoices = query.order_by(Invoice.created_at.desc()).all()
+    invoices = query.all()
     return render_template(
         "invoices_list.html",
         invoices=invoices,
-        status_filter=status_filter
+        status_filter=status_filter,
     )
 
 
@@ -838,16 +843,17 @@ def list_invoices():
 def new_invoice():
     customers = Customer.query.order_by(Customer.name).all()
     products = Product.query.filter_by(active=True).order_by(Product.name).all()
+    settings = Settings.load()
 
     if request.method == "POST":
-        return handle_invoice_form(customers, products)
+        return _handle_invoice_form(customers, products, settings)
 
-    # issue_date defaults to today, due_date handled client-side or via payment terms
     return render_template(
         "invoice_form.html",
         invoice=None,
         customers=customers,
         products=products,
+        settings=settings,
     )
 
 
@@ -857,26 +863,26 @@ def edit_invoice(invoice_id):
     invoice = Invoice.query.get_or_404(invoice_id)
     customers = Customer.query.order_by(Customer.name).all()
     products = Product.query.filter_by(active=True).order_by(Product.name).all()
+    settings = Settings.load()
 
     if request.method == "POST":
-        return handle_invoice_form(customers, products, invoice)
+        return _handle_invoice_form(customers, products, settings, invoice=invoice)
 
     return render_template(
         "invoice_form.html",
         invoice=invoice,
         customers=customers,
         products=products,
+        settings=settings,
     )
 
 
-def handle_invoice_form(customers, products, invoice=None):
+def _handle_invoice_form(customers, products, settings, invoice: Invoice | None = None):
     is_new = invoice is None
 
     customer_id = request.form.get("customer_id")
     issue_date_str = request.form.get("issue_date")
-    due_date_str = request.form.get("due_date")
-    status = request.form.get("status") or "draft"
-    notes = request.form.get("notes")
+    due_date_str = request.form.get("due_date") or ""
 
     try:
         issue_date = datetime.strptime(issue_date_str, "%Y-%m-%d").date()
@@ -887,7 +893,10 @@ def handle_invoice_form(customers, products, invoice=None):
             invoice=invoice,
             customers=customers,
             products=products,
+            settings=settings,
         )
+
+    customer = Customer.query.get(int(customer_id)) if customer_id else None
 
     if due_date_str:
         try:
@@ -899,26 +908,21 @@ def handle_invoice_form(customers, products, invoice=None):
                 invoice=invoice,
                 customers=customers,
                 products=products,
+                settings=settings,
             )
     else:
-        due_date = None
+        # Use global payment terms if enabled, otherwise allow null
+        if settings.use_global_payment_terms and settings.payment_terms_days:
+            due_date = issue_date + timedelta(days=int(settings.payment_terms_days))
+        else:
+            due_date = None
 
-    due_date = apply_global_payment_terms(issue_date, due_date)
+    status = request.form.get("status") or "draft"
+    notes = request.form.get("notes")
 
-    customer = Customer.query.get(int(customer_id)) if customer_id else None
-
-    if not customer:
-        flash("Customer is required", "danger")
-        return render_template(
-            "invoice_form.html",
-            invoice=invoice,
-            customers=customers,
-            products=products,
-        )
-
-    if not invoice:
+    if invoice is None:
         invoice = Invoice(
-            customer_id=customer.id,
+            customer_id=customer.id if customer else None,
             invoice_number=generate_invoice_number(),
             issue_date=issue_date,
             due_date=due_date,
@@ -927,7 +931,7 @@ def handle_invoice_form(customers, products, invoice=None):
         )
         db.session.add(invoice)
     else:
-        invoice.customer_id = customer.id
+        invoice.customer_id = customer.id if customer else None
         invoice.issue_date = issue_date
         invoice.due_date = due_date
         invoice.status = status
@@ -936,14 +940,13 @@ def handle_invoice_form(customers, products, invoice=None):
 
     invoice.tax_rate = determine_tax_rate_for_customer(customer)
 
-    # Line items
     descriptions = request.form.getlist("item_description")
     quantities = request.form.getlist("item_quantity")
     unit_prices = request.form.getlist("item_unit_price")
-    product_ids = request.form.getlist("item_product_id")
+    product_ids = request.form.getlist("item_product_id") or []
 
-    for desc, qty_str, price_str, product_id_str in zip(
-        descriptions, quantities, unit_prices, product_ids
+    for idx, (desc, qty_str, price_str) in enumerate(
+        zip(descriptions, quantities, unit_prices)
     ):
         desc = (desc or "").strip()
         if not desc:
@@ -954,8 +957,17 @@ def handle_invoice_form(customers, products, invoice=None):
         except Exception:
             continue
 
-        product_id = int(product_id_str) if product_id_str else None
         line_total = qty * price
+
+        product_id = None
+        if idx < len(product_ids):
+            raw_pid = product_ids[idx]
+            if raw_pid:
+                try:
+                    product_id = int(raw_pid)
+                except Exception:
+                    product_id = None
+
         item = InvoiceItem(
             invoice=invoice,
             product_id=product_id,
@@ -969,6 +981,7 @@ def handle_invoice_form(customers, products, invoice=None):
     invoice.recalc_totals()
     db.session.commit()
 
+    # Webhook
     try:
         event_name = "invoice.created" if is_new else "invoice.updated"
         send_outbound_webhook(event_name, invoice.to_dict())
@@ -983,19 +996,18 @@ def handle_invoice_form(customers, products, invoice=None):
 @login_required
 def invoice_detail(invoice_id):
     invoice = Invoice.query.get_or_404(invoice_id)
-    products = {p.id: p for p in Product.query.all()}
-    return render_template("invoice_detail.html", invoice=invoice, products=products)
+    return render_template("invoice_detail.html", invoice=invoice)
 
 
-@app.route("/invoices/<int:invoice_id>/print")
+@app.route("/invoices/<int:invoice_id>/pdf")
 @login_required
-def invoice_print(invoice_id):
+def invoice_pdf(invoice_id):
     """
-    Simple HTML "print" view which you can print to PDF from the browser.
+    Renders a printable HTML invoice; your template can trigger browser print
+    or you can pipe it through wkhtmltopdf/WeasyPrint externally if you like.
     """
     invoice = Invoice.query.get_or_404(invoice_id)
-    products = {p.id: p for p in Product.query.all()}
-    return render_template("invoice_print.html", invoice=invoice, products=products)
+    return render_template("invoice_pdf.html", invoice=invoice)
 
 
 @app.route("/invoices/<int:invoice_id>/payments/new", methods=["POST"])
@@ -1029,10 +1041,7 @@ def add_payment(invoice_id):
     try:
         send_outbound_webhook(
             "payment.recorded",
-            {
-                "invoice": invoice.to_dict(include_items=False),
-                "payment": payment.to_dict(),
-            },
+            {"invoice": invoice.to_dict(include_items=False), "payment": payment.to_dict()},
         )
     except Exception:
         pass
@@ -1041,7 +1050,9 @@ def add_payment(invoice_id):
     return redirect(url_for("invoice_detail", invoice_id=invoice.id))
 
 
-# ----- CSV Import -----
+# -------------------------------------------------
+# Imports
+# -------------------------------------------------
 
 @app.route("/import/customers", methods=["GET", "POST"])
 @login_required
@@ -1145,8 +1156,11 @@ def import_invoices():
         return redirect(url_for("import_invoices"))
 
     required = [
-        "issue_date", "due_date",
-        "item_description", "item_quantity", "item_unit_price"
+        "issue_date",
+        "due_date",
+        "item_description",
+        "item_quantity",
+        "item_unit_price",
     ]
     missing = [c for c in required if c not in reader.fieldnames]
     if missing:
@@ -1173,10 +1187,7 @@ def import_invoices():
                 if not customer_name:
                     errors += 1
                     continue
-                customer = Customer(
-                    name=customer_name,
-                    email=customer_email,
-                )
+                customer = Customer(name=customer_name, email=customer_email)
                 db.session.add(customer)
                 db.session.flush()
 
@@ -1233,53 +1244,42 @@ def import_invoices():
 
     db.session.commit()
 
-    flash(f"Imported {count} invoices. {errors} rows skipped due to errors.", "success")
+    flash(
+        f"Imported {count} invoices. {errors} rows skipped due to errors.",
+        "success",
+    )
     return redirect(url_for("list_invoices"))
 
 
-# -----------------------
-# JSON API endpoints
-# -----------------------
+# -------------------------------------------------
+# API endpoints
+# -------------------------------------------------
 
-# Customers
+# --- Customers API ---
 
-@app.route("/api/customers", methods=["GET"])
-def api_list_customers():
-    require_api_key()
-    q = request.args.get("q", "").strip()
-    query = Customer.query
-    if q:
-        like = f"%{q}%"
-        query = query.filter(
-            db.or_(Customer.name.ilike(like), Customer.email.ilike(like))
+@app.route("/api/customers", methods=["GET", "POST"])
+def api_customers():
+    if request.method == "GET":
+        require_api_key(write=False)
+        customers = Customer.query.order_by(Customer.id).all()
+        return jsonify(
+            [
+                {
+                    "id": c.id,
+                    "name": c.name,
+                    "email": c.email,
+                    "phone": c.phone,
+                }
+                for c in customers
+            ]
         )
-    customers = query.order_by(Customer.name).all()
-    return jsonify([customer_to_dict(c) for c in customers])
 
-
-@app.route("/api/customers/<int:customer_id>", methods=["GET"])
-def api_get_customer(customer_id):
-    require_api_key()
-    customer = Customer.query.get_or_404(customer_id)
-    return jsonify(customer_to_dict(customer))
-
-
-@app.route("/api/customers", methods=["POST"])
-def api_create_customer():
-    require_api_key()
-    data = request.get_json(force=True) or {}
-
+    # POST – create
+    require_api_key(write=True)
+    data = request.get_json(force=True)
     name = (data.get("name") or "").strip()
     if not name:
         return jsonify({"error": "name is required"}), 400
-
-    use_default_tax = bool(data.get("use_default_tax", True))
-    tax_rate_dec = None
-    if not use_default_tax and data.get("tax_rate") is not None:
-        try:
-            tax_rate_dec = Decimal(str(data["tax_rate"]))
-        except Exception:
-            return jsonify({"error": "invalid tax_rate"}), 400
 
     customer = Customer(
         name=name,
@@ -1290,91 +1290,53 @@ def api_create_customer():
         city=data.get("city"),
         postcode=data.get("postcode"),
         country=data.get("country"),
-        use_default_tax=use_default_tax,
-        tax_rate=tax_rate_dec,
     )
     db.session.add(customer)
     db.session.commit()
-    return jsonify(customer_to_dict(customer)), 201
+    return jsonify({"id": customer.id, "name": customer.name}), 201
 
 
-@app.route("/api/customers/<int:customer_id>", methods=["PUT"])
-def api_update_customer(customer_id):
-    require_api_key()
-    customer = Customer.query.get_or_404(customer_id)
-    data = request.get_json(force=True) or {}
+@app.route("/api/customers/<int:customer_id>", methods=["GET"])
+def api_customer_detail(customer_id):
+    require_api_key(write=False)
+    c = Customer.query.get_or_404(customer_id)
+    return jsonify(
+        {
+            "id": c.id,
+            "name": c.name,
+            "email": c.email,
+            "phone": c.phone,
+            "address_line1": c.address_line1,
+            "address_line2": c.address_line2,
+            "city": c.city,
+            "postcode": c.postcode,
+            "country": c.country,
+        }
+    )
 
-    if "name" in data:
-        name = (data.get("name") or "").strip()
-        if not name:
-            return jsonify({"error": "name cannot be empty"}), 400
-        customer.name = name
 
-    if "email" in data:
-        customer.email = data.get("email")
-    if "phone" in data:
-        customer.phone = data.get("phone")
-    if "address_line1" in data:
-        customer.address_line1 = data.get("address_line1")
-    if "address_line2" in data:
-        customer.address_line2 = data.get("address_line2")
-    if "city" in data:
-        customer.city = data.get("city")
-    if "postcode" in data:
-        customer.postcode = data.get("postcode")
-    if "country" in data:
-        customer.country = data.get("country")
+# --- Products API ---
 
-    if "use_default_tax" in data or "tax_rate" in data:
-        use_default_tax = data.get(
-            "use_default_tax", customer.use_default_tax
+@app.route("/api/products", methods=["GET", "POST"])
+def api_products():
+    if request.method == "GET":
+        require_api_key(write=False)
+        products = Product.query.order_by(Product.name).all()
+        return jsonify(
+            [
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "description": p.description,
+                    "unit_price": float(p.unit_price),
+                    "active": bool(p.active),
+                }
+                for p in products
+            ]
         )
-        use_default_tax = bool(use_default_tax)
-        customer.use_default_tax = use_default_tax
 
-        if use_default_tax:
-            customer.tax_rate = None
-        else:
-            if data.get("tax_rate") is None:
-                customer.tax_rate = None
-            else:
-                try:
-                    customer.tax_rate = Decimal(str(data["tax_rate"]))
-                except Exception:
-                    return jsonify({"error": "invalid tax_rate"}), 400
-
-    db.session.commit()
-    return jsonify(customer_to_dict(customer))
-
-
-# Products
-
-@app.route("/api/products", methods=["GET"])
-def api_list_products():
-    require_api_key()
-    active_param = request.args.get("active")
-    query = Product.query
-    if active_param is not None:
-        if active_param.lower() in ("1", "true", "yes"):
-            query = query.filter_by(active=True)
-        elif active_param.lower() in ("0", "false", "no"):
-            query = query.filter_by(active=False)
-    products = query.order_by(Product.name).all()
-    return jsonify([product_to_dict(p) for p in products])
-
-
-@app.route("/api/products/<int:product_id>", methods=["GET"])
-def api_get_product(product_id):
-    require_api_key()
-    product = Product.query.get_or_404(product_id)
-    return jsonify(product_to_dict(product))
-
-
-@app.route("/api/products", methods=["POST"])
-def api_create_product():
-    require_api_key()
-    data = request.get_json(force=True) or {}
-
+    require_api_key(write=True)
+    data = request.get_json(force=True)
     name = (data.get("name") or "").strip()
     if not name:
         return jsonify({"error": "name is required"}), 400
@@ -1382,7 +1344,7 @@ def api_create_product():
     try:
         unit_price = Decimal(str(data.get("unit_price", "0")))
     except Exception:
-        return jsonify({"error": "invalid unit_price"}), 400
+        unit_price = Decimal("0.00")
 
     active = bool(data.get("active", True))
 
@@ -1394,65 +1356,29 @@ def api_create_product():
     )
     db.session.add(product)
     db.session.commit()
-    return jsonify(product_to_dict(product)), 201
+    return jsonify({"id": product.id, "name": product.name}), 201
 
 
-@app.route("/api/products/<int:product_id>", methods=["PUT"])
-def api_update_product(product_id):
-    require_api_key()
-    product = Product.query.get_or_404(product_id)
-    data = request.get_json(force=True) or {}
-
-    if "name" in data:
-        name = (data.get("name") or "").strip()
-        if not name:
-            return jsonify({"error": "name cannot be empty"}), 400
-        product.name = name
-
-    if "description" in data:
-        product.description = data.get("description")
-
-    if "unit_price" in data:
-        try:
-            product.unit_price = Decimal(str(data["unit_price"]))
-        except Exception:
-            return jsonify({"error": "invalid unit_price"}), 400
-
-    if "active" in data:
-        product.active = bool(data.get("active"))
-
-    db.session.commit()
-    return jsonify(product_to_dict(product))
+@app.route("/api/products/<int:product_id>", methods=["GET"])
+def api_product_detail(product_id):
+    require_api_key(write=False)
+    p = Product.query.get_or_404(product_id)
+    return jsonify(
+        {
+            "id": p.id,
+            "name": p.name,
+            "description": p.description,
+            "unit_price": float(p.unit_price),
+            "active": bool(p.active),
+        }
+    )
 
 
-# Invoices
-
-@app.route("/api/invoices", methods=["GET"])
-def api_list_invoices():
-    require_api_key()
-
-    q_status = request.args.get("status")
-    q_customer_id = request.args.get("customer_id", type=int)
-    q_invoice_number = (request.args.get("invoice_number") or "").strip()
-
-    query = Invoice.query
-
-    if q_status:
-        query = query.filter_by(status=q_status)
-
-    if q_customer_id:
-        query = query.filter_by(customer_id=q_customer_id)
-
-    if q_invoice_number:
-        query = query.filter(Invoice.invoice_number == q_invoice_number)
-
-    invoices = query.order_by(Invoice.created_at.desc()).all()
-    return jsonify([inv.to_dict(include_items=False, include_payments=False) for inv in invoices])
-
+# --- Invoices API (basic) ---
 
 @app.route("/api/invoices", methods=["POST"])
 def api_create_invoice():
-    require_api_key()
+    require_api_key(write=True)
     data = request.get_json(force=True)
 
     customer_id = data.get("customer_id")
@@ -1495,17 +1421,13 @@ def api_create_invoice():
 
     try:
         issue_date = datetime.strptime(data["issue_date"], "%Y-%m-%d").date()
+        due_date = (
+            datetime.strptime(data["due_date"], "%Y-%m-%d").date()
+            if data.get("due_date")
+            else None
+        )
     except Exception:
-        return jsonify({"error": "issue_date must be YYYY-MM-DD"}), 400
-
-    due_date = None
-    if "due_date" in data and data["due_date"]:
-        try:
-            due_date = datetime.strptime(data["due_date"], "%Y-%m-%d").date()
-        except Exception:
-            return jsonify({"error": "due_date must be YYYY-MM-DD"}), 400
-
-    due_date = apply_global_payment_terms(issue_date, due_date)
+        return jsonify({"error": "issue_date and due_date must be YYYY-MM-DD"}), 400
 
     invoice = Invoice(
         customer=customer,
@@ -1536,38 +1458,48 @@ def api_create_invoice():
             continue
         qty = Decimal(str(item_data.get("quantity", "0")))
         price = Decimal(str(item_data.get("unit_price", "0")))
+        line_total = qty * price
+
         product_id = item_data.get("product_id")
+        pid = None
         if product_id:
             try:
-                product_id = int(product_id)
+                pid = int(product_id)
             except Exception:
-                product_id = None
-        line_total = qty * price
-        db.session.add(InvoiceItem(
-            invoice=invoice,
-            product_id=product_id,
-            description=desc,
-            quantity=qty,
-            unit_price=price,
-            line_total=line_total,
-        ))
+                pid = None
+
+        db.session.add(
+            InvoiceItem(
+                invoice=invoice,
+                product_id=pid,
+                description=desc,
+                quantity=qty,
+                unit_price=price,
+                line_total=line_total,
+            )
+        )
 
     invoice.recalc_totals()
     db.session.commit()
+
+    try:
+        send_outbound_webhook("invoice.created", invoice.to_dict())
+    except Exception:
+        pass
 
     return jsonify(invoice.to_dict()), 201
 
 
 @app.route("/api/invoices/<int:invoice_id>", methods=["GET"])
 def api_get_invoice(invoice_id):
-    require_api_key()
+    require_api_key(write=False)
     invoice = Invoice.query.get_or_404(invoice_id)
     return jsonify(invoice.to_dict())
 
 
 @app.route("/api/invoices/<int:invoice_id>", methods=["PUT"])
 def api_update_invoice(invoice_id):
-    require_api_key()
+    require_api_key(write=True)
     invoice = Invoice.query.get_or_404(invoice_id)
     data = request.get_json(force=True)
 
@@ -1583,9 +1515,7 @@ def api_update_invoice(invoice_id):
 
     if "issue_date" in data:
         try:
-            invoice.issue_date = datetime.strptime(
-                data["issue_date"], "%Y-%m-%d"
-            ).date()
+            invoice.issue_date = datetime.strptime(data["issue_date"], "%Y-%m-%d").date()
         except Exception:
             return jsonify({"error": "invalid issue_date"}), 400
 
@@ -1600,7 +1530,13 @@ def api_update_invoice(invoice_id):
         else:
             invoice.due_date = None
 
-    if "status" in data and data["status"] in ["draft", "sent", "paid", "overdue", "cancelled"]:
+    if "status" in data and data["status"] in [
+        "draft",
+        "sent",
+        "paid",
+        "overdue",
+        "cancelled",
+    ]:
         invoice.status = data["status"]
 
     if "notes" in data:
@@ -1625,104 +1561,43 @@ def api_update_invoice(invoice_id):
                 continue
             qty = Decimal(str(item_data.get("quantity", "0")))
             price = Decimal(str(item_data.get("unit_price", "0")))
+            line_total = qty * price
+
             product_id = item_data.get("product_id")
+            pid = None
             if product_id:
                 try:
-                    product_id = int(product_id)
+                    pid = int(product_id)
                 except Exception:
-                    product_id = None
-            line_total = qty * price
-            db.session.add(InvoiceItem(
-                invoice=invoice,
-                product_id=product_id,
-                description=desc,
-                quantity=qty,
-                unit_price=price,
-                line_total=line_total,
-            ))
+                    pid = None
+
+            db.session.add(
+                InvoiceItem(
+                    invoice=invoice,
+                    product_id=pid,
+                    description=desc,
+                    quantity=qty,
+                    unit_price=price,
+                    line_total=line_total,
+                )
+            )
 
     invoice.recalc_totals()
     db.session.commit()
-    return jsonify(invoice.to_dict())
-
-
-# Payments
-
-@app.route("/api/payments", methods=["GET"])
-def api_list_payments():
-    require_api_key()
-    invoice_id = request.args.get("invoice_id", type=int)
-    query = Payment.query
-    if invoice_id:
-        query = query.filter_by(invoice_id=invoice_id)
-    payments = query.order_by(Payment.created_at.desc()).all()
-    return jsonify([payment_to_dict(p) for p in payments])
-
-
-@app.route("/api/payments/<int:payment_id>", methods=["GET"])
-def api_get_payment(payment_id):
-    require_api_key()
-    payment = Payment.query.get_or_404(payment_id)
-    return jsonify(payment_to_dict(payment))
-
-
-@app.route("/api/payments", methods=["POST"])
-def api_create_payment():
-    require_api_key()
-    data = request.get_json(force=True) or {}
-
-    invoice_id = data.get("invoice_id")
-    if not invoice_id:
-        return jsonify({"error": "invoice_id is required"}), 400
-
-    invoice = Invoice.query.get(invoice_id)
-    if not invoice:
-        return jsonify({"error": "invoice not found"}), 404
 
     try:
-        amount = Decimal(str(data["amount"]))
-    except Exception:
-        return jsonify({"error": "invalid amount"}), 400
-
-    try:
-        payment_date = datetime.strptime(data["payment_date"], "%Y-%m-%d").date()
-    except Exception:
-        return jsonify({"error": "payment_date must be YYYY-MM-DD"}), 400
-
-    payment = Payment(
-        invoice=invoice,
-        amount=amount,
-        payment_date=payment_date,
-        method=data.get("method"),
-        external_reference=data.get("external_reference"),
-    )
-    db.session.add(payment)
-    invoice.recalc_totals()
-    db.session.commit()
-
-    try:
-        send_outbound_webhook(
-            "payment.recorded",
-            {
-                "invoice": invoice.to_dict(include_items=False),
-                "payment": payment_to_dict(payment),
-            },
-        )
+        send_outbound_webhook("invoice.updated", invoice.to_dict())
     except Exception:
         pass
 
-    return jsonify({
-        "status": "ok",
-        "invoice": invoice.to_dict(include_items=False),
-        "payment": payment_to_dict(payment),
-    }), 201
+    return jsonify(invoice.to_dict())
 
 
-# Inbound webhook (payment by invoice_number)
+# --- Inbound webhook for payment ---
 
 @app.route("/api/webhooks/payment", methods=["POST"])
 def api_webhook_payment():
-    require_api_key()
+    require_api_key(write=True)
     data = request.get_json(force=True)
 
     invoice_number = data.get("invoice_number")
@@ -1750,50 +1625,71 @@ def api_webhook_payment():
     invoice.recalc_totals()
     db.session.commit()
 
-    return jsonify({
-        "status": "ok",
-        "invoice": invoice.to_dict(include_items=False),
-        "payment": payment.to_dict()
-    }), 201
+    try:
+        send_outbound_webhook(
+            "payment.recorded",
+            {
+                "invoice": invoice.to_dict(include_items=False),
+                "payment": payment.to_dict(),
+            },
+        )
+    except Exception:
+        pass
+
+    return (
+        jsonify(
+            {
+                "status": "ok",
+                "invoice": invoice.to_dict(include_items=False),
+                "payment": payment.to_dict(),
+            }
+        ),
+        201,
+    )
 
 
-# -----------------------
-# CLI helper
-# -----------------------
+# -------------------------------------------------
+# CLI init
+# -------------------------------------------------
 
 @app.cli.command("init-db")
 def init_db_command():
     db.create_all()
-    settings = Settings.query.get(1)
-    if not settings:
-        settings = Settings(
-            id=1,
-            default_tax_rate=Decimal("0.00"),
-            outbound_webhook_url=None,
-            outbound_webhook_enabled=False,
-            outbound_webhook_events="[]",
-            brand_name=None,
-            logo_url=None,
-            payment_terms_days=30,
-            use_global_payment_terms=True,
-        )
-        db.session.add(settings)
 
-    if not APIKey.query.first():
-        default_key_value = generate_api_key_value()
-        api_key = APIKey(name="Default key", key=default_key_value, active=True)
-        db.session.add(api_key)
-        print("Created default API key:", default_key_value)
+    # Settings row
+    if not Settings.query.get(1):
+        db.session.add(Settings(id=1, default_tax_rate=Decimal("0.00")))
 
+    # Default admin user
     if not User.query.filter_by(username="admin").first():
-        user = User(username="admin")
-        user.set_password("admin123")
-        db.session.add(user)
+        admin = User(username="admin")
+        admin.set_password("admin123")
+        db.session.add(admin)
         print("Created default admin user: admin / admin123")
+
+    # Default API key
+    if not ApiKey.query.first():
+        raw_key = secrets.token_hex(32)
+        key_id = raw_key[:12]
+        key_hash = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+        api_key = ApiKey(
+            name="Default key",
+            key_id=key_id,
+            key_hash=key_hash,
+            can_read=True,
+            can_write=True,
+            active=True,
+        )
+        db.session.add(api_key)
+        print("Created default API key:", raw_key)
 
     db.session.commit()
     print("DB initialized")
 
+
+# -------------------------------------------------
+# Main
+# -------------------------------------------------
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)
