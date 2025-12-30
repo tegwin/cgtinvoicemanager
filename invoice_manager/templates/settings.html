@@ -1,189 +1,160 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <div>
-    <h2 class="mb-0">Settings</h2>
-    <div class="text-muted small">
-      Application defaults, branding, and webhook configuration.
-    </div>
+<div class="mb-3">
+  <h1 class="h3 mb-0">Settings</h1>
+  <div class="section-subtitle">
+    Configure branding, tax, payment terms and outgoing webhooks.
   </div>
 </div>
 
-<div class="row g-4">
-  <div class="col-lg-7">
-    <!-- General & Tax -->
-    <div class="card-dark p-3 p-md-4 mb-3">
-      <h5 class="mb-3">General</h5>
+<div class="card-dark p-3 p-md-4">
+  <form method="post">
 
-      <form method="post">
+    <div class="row g-4">
+
+      <!-- Branding -->
+      <div class="col-lg-6">
+        <h2 class="section-title mb-1">Branding</h2>
+        <p class="section-subtitle mb-3">
+          Set how the app appears in the header and on invoices.
+        </p>
+
         <div class="mb-3">
           <label class="form-label">Brand name</label>
           <input type="text"
                  name="brand_name"
                  class="form-control"
-                 value="{{ settings.brand_name or '' }}"
-                 placeholder="Invoice Manager">
+                 placeholder="e.g. Sondela Consulting"
+                 value="{{ settings.brand_name or '' }}">
         </div>
 
         <div class="mb-3">
           <label class="form-label">Logo URL</label>
-          <input type="url"
+          <input type="text"
                  name="logo_url"
                  class="form-control"
-                 value="{{ settings.logo_url or '' }}"
-                 placeholder="https://example.com/logo.png">
-          <div class="form-text">
-            Shown in the sidebar header if provided.
+                 placeholder="https://…"
+                 value="{{ settings.logo_url or '' }}">
+          <div class="form-text text-muted-soft">
+            Optional. Used on invoice PDFs / print view in future.
           </div>
         </div>
+      </div>
 
-        <hr class="my-3" style="border-color: rgba(255,255,255,0.1);">
+      <!-- Tax & terms -->
+      <div class="col-lg-6">
+        <h2 class="section-title mb-1">Tax &amp; payment terms</h2>
+        <p class="section-subtitle mb-3">
+          Global defaults used when creating new invoices.
+        </p>
 
-        <h6 class="mb-2">Tax</h6>
         <div class="mb-3">
           <label class="form-label">Default tax rate (%)</label>
           <input type="number"
-                 step="0.01"
-                 min="0"
                  name="default_tax_rate"
                  class="form-control"
+                 step="0.01" min="0"
                  value="{{ settings.default_tax_rate or 0 }}">
-          <div class="form-text">
-            Used for customers that are set to "Use default tax".
-          </div>
-        </div>
-
-        <hr class="my-3" style="border-color: rgba(255,255,255,0.1);">
-
-        <h6 class="mb-2">Payment terms</h6>
-        <div class="form-check form-switch mb-2">
-          <input class="form-check-input"
-                 type="checkbox"
-                 id="use_global_payment_terms"
-                 name="use_global_payment_terms"
-                 {% if settings.use_global_payment_terms %}checked{% endif %}>
-          <label class="form-check-label" for="use_global_payment_terms">
-            Use global payment terms
-          </label>
-        </div>
-        <div class="mb-1">
-          <label class="form-label">Payment due (days from issue date)</label>
-          <input type="number"
-                 min="0"
-                 name="payment_terms_days"
-                 class="form-control"
-                 value="{{ settings.payment_terms_days or 0 }}">
-        </div>
-        <div class="form-text">
-          If enabled, new invoices with no due date will use this value.
-        </div>
-
-        <div class="mt-4 d-flex justify-content-end">
-          <button type="submit" class="btn btn-primary">
-            Save settings
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <div class="col-lg-5">
-    <!-- Webhooks -->
-    <div class="card-dark p-3 p-md-4 mb-3">
-      <h5 class="mb-3">Outbound webhooks</h5>
-
-      <form method="post">
-        <!-- We submit the same form as above, so fields must match -->
-        <input type="hidden" name="brand_name" value="{{ settings.brand_name or '' }}">
-        <input type="hidden" name="logo_url" value="{{ settings.logo_url or '' }}">
-        <input type="hidden" name="default_tax_rate" value="{{ settings.default_tax_rate or 0 }}">
-        <input type="hidden" name="payment_terms_days" value="{{ settings.payment_terms_days or 0 }}">
-        <input type="hidden" name="use_global_payment_terms"
-               value="{% if settings.use_global_payment_terms %}on{% endif %}">
-
-        <div class="form-check form-switch mb-3">
-          <input class="form-check-input"
-                 type="checkbox"
-                 id="outbound_webhook_enabled"
-                 name="outbound_webhook_enabled"
-                 {% if settings.outbound_webhook_enabled %}checked{% endif %}>
-          <label class="form-check-label" for="outbound_webhook_enabled">
-            Enable outbound webhooks
-          </label>
         </div>
 
         <div class="mb-3">
+          <label class="form-label">Payment terms</label>
+          <div class="form-check form-switch mb-2">
+            <input class="form-check-input"
+                   type="checkbox"
+                   id="use_global_payment_terms"
+                   name="use_global_payment_terms"
+                   {% if settings.use_global_payment_terms %}checked{% endif %}>
+            <label class="form-check-label" for="use_global_payment_terms">
+              Use global payment terms
+            </label>
+          </div>
+          <input type="number"
+                 name="payment_terms_days"
+                 class="form-control"
+                 min="1"
+                 placeholder="30"
+                 value="{{ settings.payment_terms_days or '' }}">
+          <div class="form-text text-muted-soft">
+            When enabled and a due date isn’t set manually, the due date will be
+            <code>issue date + this many days</code>.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr class="my-4" style="border-color: rgba(15,23,42,0.9);">
+
+    <!-- Webhooks -->
+    <div class="row g-4">
+      <div class="col-lg-7">
+        <h2 class="section-title mb-1">Outgoing webhooks</h2>
+        <p class="section-subtitle mb-3">
+          Notify an external system when invoices or payments change.
+        </p>
+
+        <input type="hidden" name="outbound_webhook_enabled_present" value="1">
+
+        <div class="mb-3">
           <label class="form-label">Webhook URL</label>
-          <input type="url"
+          <input type="text"
                  name="outbound_webhook_url"
                  class="form-control"
-                 value="{{ settings.outbound_webhook_url or '' }}"
-                 placeholder="https://your-system.example.com/webhook">
-        </div>
-
-        {% set selected = (settings.outbound_webhook_events or '').split(',') | map('trim') | list %}
-
-        <div class="mb-2">
-          <label class="form-label">Events to send</label>
-          <div class="form-check">
-            <input class="form-check-input"
-                   type="checkbox"
-                   id="evt-invoice-created"
-                   name="outbound_webhook_events"
-                   value="invoice.created"
-                   {% if 'invoice.created' in selected %}checked{% endif %}>
-            <label class="form-check-label" for="evt-invoice-created">
-              Invoice created
-            </label>
-          </div>
-          <div class="form-check">
-            <input class="form-check-input"
-                   type="checkbox"
-                   id="evt-invoice-updated"
-                   name="outbound_webhook_events"
-                   value="invoice.updated"
-                   {% if 'invoice.updated' in selected %}checked{% endif %}>
-            <label class="form-check-label" for="evt-invoice-updated">
-              Invoice updated
-            </label>
-          </div>
-          <div class="form-check">
-            <input class="form-check-input"
-                   type="checkbox"
-                   id="evt-payment-recorded"
-                   name="outbound_webhook_events"
-                   value="payment.recorded"
-                   {% if 'payment.recorded' in selected %}checked{% endif %}>
-            <label class="form-check-label" for="evt-payment-recorded">
-              Payment recorded
-            </label>
+                 placeholder="https://example.com/webhooks/invoices"
+                 value="{{ settings.outbound_webhook_url or '' }}">
+          <div class="form-text text-muted-soft">
+            Events will be sent as POST requests with a JSON body.
           </div>
         </div>
 
-        <div class="form-text mb-3">
-          Webhooks are sent as JSON with <code>event</code>, <code>data</code>,
-          and <code>sent_at</code> fields.
+        <div class="mb-3">
+          <div class="form-check form-switch">
+            <input class="form-check-input"
+                   type="checkbox"
+                   id="outbound_webhook_enabled"
+                   name="outbound_webhook_enabled"
+                   {% if settings.outbound_webhook_enabled %}checked{% endif %}>
+            <label class="form-check-label" for="outbound_webhook_enabled">
+              Enable outgoing webhooks
+            </label>
+          </div>
         </div>
+      </div>
 
-        <div class="d-flex justify-content-end">
-          <button type="submit" class="btn btn-outline-primary btn-sm">
-            Save webhook settings
-          </button>
+      <div class="col-lg-5">
+        <h3 class="section-title mb-2">Events to send</h3>
+        <p class="section-subtitle mb-2">
+          Tick which events should fire the webhook. Leave all unticked to disable
+          events without turning webhooks off entirely.
+        </p>
+
+        <div class="card-dark-soft p-3">
+          {% for value, label in available_events %}
+          <div class="form-check mb-2">
+            <input class="form-check-input"
+                   type="checkbox"
+                   name="outbound_webhook_events"
+                   id="evt-{{ value }}"
+                   value="{{ value }}"
+                   {% if value in selected_events %}checked{% endif %}>
+            <label class="form-check-label" for="evt-{{ value }}">
+              {{ label }}
+            </label>
+          </div>
+          {% endfor %}
+          <div class="small text-muted-soft mt-2">
+            Payload contains <code>event</code>, <code>data</code> and <code>sent_at</code>.
+          </div>
         </div>
-      </form>
+      </div>
     </div>
 
-    <!-- Quick info -->
-    <div class="card-dark p-3 p-md-4">
-      <h6 class="mb-2">API & Webhooks</h6>
-      <p class="text-muted small mb-1">
-        API keys can be managed under <strong>Settings → API keys</strong>.
-      </p>
-      <p class="text-muted small mb-0">
-        See <a href="{{ url_for('api_docs') }}">API docs</a> for request examples.
-      </p>
+    <div class="mt-4 d-flex justify-content-end">
+      <button type="submit" class="btn btn-primary">
+        <i class="fa-regular fa-floppy-disk me-2"></i> Save settings
+      </button>
     </div>
-  </div>
+  </form>
 </div>
 {% endblock %}

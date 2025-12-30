@@ -1,80 +1,111 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="page-header mb-4 d-flex justify-content-between align-items-center">
-  <div>
-    <h2 class="mb-1">API Keys</h2>
-    <p class="text-muted mb-0">Manage API access for integrations and automations.</p>
+<div class="mb-3">
+  <h1 class="h3 mb-0">API Keys</h1>
+  <div class="section-subtitle">
+    Manage API access for integrations and automations.
   </div>
-  <a href="{{ url_for('api_keys_new') }}" class="btn btn-primary">
-    <i class="fa-solid fa-key me-1"></i> Create API key
-  </a>
 </div>
 
-<div class="card-dark p-3 p-md-4">
-  {% if api_keys %}
-    <div class="table-responsive">
-      <table class="table table-dark align-middle mb-0">
-        <thead>
-          <tr>
-            <th style="width: 18%;">Name</th>
-            <th style="width: 22%;">Key ID</th>
-            <th style="width: 15%;">Permissions</th>
-            <th style="width: 15%;">Created</th>
-            <th style="width: 15%;">Last used</th>
-            <th style="width: 10%;">Status</th>
-            <th style="width: 15%;"></th>
-          </tr>
-        </thead>
-        <tbody>
-        {% for k in api_keys %}
-          <tr>
-            <td>{{ k.name }}</td>
-            <td class="font-mono small">
-              {{ k.key[:10] }}…
-            </td>
-            <td>
-              <span class="badge-perm badge-perm-read">read</span>
-              <span class="badge-perm badge-perm-write ms-1">write</span>
-            </td>
-            <td>{{ k.created_at.date() if k.created_at else '-' }}</td>
-            <td>
-              {% if k.last_used_at %}
-                {{ k.last_used_at.date() }}
-              {% else %}
-                <span class="text-muted">Never</span>
-              {% endif %}
-            </td>
-            <td>
-              {% if k.active %}
-                <span class="status-pill status-pill-active">Active</span>
-              {% else %}
-                <span class="status-pill status-pill-inactive">Inactive</span>
-              {% endif %}
-            </td>
-            <td>
-              <div class="d-flex gap-2 justify-content-end">
-                <form method="post" action="{{ url_for('api_keys_toggle', key_id=k.id) }}"
-                      onsubmit="return confirm('Toggle active status for this key?');">
-                  <button type="submit" class="btn btn-sm btn-outline-light">
-                    {% if k.active %}Revoke{% else %}Activate{% endif %}
-                  </button>
-                </form>
-                <form method="post" action="{{ url_for('api_keys_delete', key_id=k.id) }}"
-                      onsubmit="return confirm('Delete this API key? This cannot be undone.');">
-                  <button type="submit" class="btn btn-sm btn-outline-danger">
-                    Delete
-                  </button>
-                </form>
-              </div>
-            </td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
+{% if new_key_value %}
+<div class="alert alert-soft mb-4">
+  <div class="d-flex align-items-start">
+    <div class="me-2 mt-1">
+      <i class="fa-solid fa-key"></i>
     </div>
+    <div>
+      <div class="fw-semibold mb-1">
+        New API key generated
+      </div>
+      <div class="small text-muted-soft">
+        This key will only be shown once. Copy it now and store it securely.
+      </div>
+      <div class="mt-2">
+        <code class="small">{{ new_key_value }}</code>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="card-dark p-3 p-md-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <div class="section-title mb-0">Your API keys</div>
+      <div class="section-subtitle">
+        Each key has full read/write access to the JSON API.
+      </div>
+    </div>
+    <a href="{{ url_for('api_keys_new') }}" class="btn btn-primary btn-sm">
+      <i class="fa-solid fa-key me-2"></i> Create API key
+    </a>
+  </div>
+
+  {% if api_keys %}
+  <div class="table-responsive">
+    <table class="table table-dark align-middle mb-0">
+      <thead>
+      <tr>
+        <th style="width: 22%;">Name</th>
+        <th style="width: 22%;">Key ID</th>
+        <th style="width: 16%;">Permissions</th>
+        <th style="width: 14%;">Created</th>
+        <th style="width: 14%;">Last used</th>
+        <th style="width: 12%;">Status</th>
+        <th class="text-end" style="width: 10%;">Actions</th>
+      </tr>
+      </thead>
+      <tbody>
+      {% for key in api_keys %}
+      <tr>
+        <td class="fw-semibold">
+          {{ key.name }}
+        </td>
+        <td class="text-muted-soft small">
+          {{ key.key[:10] }}…
+        </td>
+        <td>
+          <span class="badge badge-pill badge-soft-blue me-1">read</span>
+          <span class="badge badge-pill badge-soft-blue">write</span>
+        </td>
+        <td class="small text-muted-soft">
+          {{ key.created_at.date() if key.created_at else "-" }}
+        </td>
+        <td class="small text-muted-soft">
+          {{ key.last_used_at.date() if key.last_used_at else "Never" }}
+        </td>
+        <td>
+          {% if key.active %}
+          <span class="badge badge-pill badge-soft-green">Active</span>
+          {% else %}
+          <span class="badge badge-pill badge-soft-red">Revoked</span>
+          {% endif %}
+        </td>
+        <td class="text-end">
+          <div class="d-inline-flex gap-1">
+            <form method="post" action="{{ url_for('api_keys_toggle', key_id=key.id) }}" class="d-inline">
+              <button type="submit" class="btn btn-sm btn-outline-light">
+                {{ "Revoke" if key.active else "Activate" }}
+              </button>
+            </form>
+            <form method="post" action="{{ url_for('api_keys_delete', key_id=key.id) }}" class="d-inline"
+                  onsubmit="return confirm('Delete this API key? This cannot be undone.');">
+              <button type="submit" class="btn btn-sm btn-outline-danger">
+                Delete
+              </button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
   {% else %}
-    <p class="text-muted mb-0">No API keys yet. Create one to get started.</p>
+  <div class="text-muted-soft small">
+    No API keys yet. Create one to start using the JSON API.
+  </div>
   {% endif %}
 </div>
 {% endblock %}
