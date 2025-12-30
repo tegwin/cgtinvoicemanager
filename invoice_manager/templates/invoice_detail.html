@@ -1,217 +1,241 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="page-header mb-4 d-flex justify-content-between align-items-center">
+<div class="d-flex justify-content-between align-items-center mb-3">
   <div>
-    <h2 class="mb-1">
-      Invoice {{ invoice.invoice_number }}
-    </h2>
-    <p class="text-muted mb-0">Detailed view including items and payment history.</p>
+    <h2 class="mb-0">Invoice {{ invoice.invoice_number }}</h2>
+    <div class="text-muted small">
+      {{ invoice.customer.name if invoice.customer else "No customer" }}
+    </div>
   </div>
   <div class="d-flex gap-2">
-    <a href="{{ url_for('edit_invoice', invoice_id=invoice.id) }}" class="btn btn-outline-light">
-      <i class="fa-regular fa-pen-to-square me-1"></i> Edit invoice
+    <a href="{{ url_for('edit_invoice', invoice_id=invoice.id) }}" class="btn btn-outline-light btn-sm">
+      Edit invoice
     </a>
-    <a href="{{ url_for('invoice_print', invoice_id=invoice.id) }}" class="btn btn-outline-light ms-2">
-  Print / PDF
-</a>
-    <a href="{{ url_for('list_invoices') }}" class="btn btn-outline-light">
+    <a href="{{ url_for('list_invoices') }}" class="btn btn-secondary btn-sm">
       Back to invoices
     </a>
   </div>
 </div>
 
 <div class="row g-4">
-  <!-- Left: summary + items -->
   <div class="col-lg-8">
-
-    <!-- Summary card -->
-    <div class="card-dark p-3 p-md-4 mb-4">
-      <div class="d-flex justify-content-between align-items-start mb-3">
-        <div>
-          <div class="small-label mb-1">Invoice</div>
-          <div class="font-mono fs-5">{{ invoice.invoice_number }}</div>
-        </div>
-        <div class="text-end">
-          <div class="small-label mb-1">Status</div>
-          {% set s = invoice.status %}
-          {% if s == 'draft' %}
-            <span class="status-pill status-pill-draft">Draft</span>
-          {% elif s == 'sent' %}
-            <span class="status-pill status-pill-sent">Sent</span>
-          {% elif s == 'paid' %}
-            <span class="status-pill status-pill-paid">Paid</span>
-          {% elif s == 'overdue' %}
-            <span class="status-pill status-pill-overdue">Overdue</span>
-          {% elif s == 'cancelled' %}
-            <span class="status-pill status-pill-cancelled">Cancelled</span>
-          {% else %}
-            <span class="status-pill status-pill-draft">{{ s }}</span>
-          {% endif %}
-        </div>
-      </div>
-
-      <div class="row g-3">
+    <div class="card-dark p-3 p-md-4 mb-3">
+      <div class="row mb-3">
         <div class="col-md-6">
-          <div class="small-label">Customer</div>
-          <div>{{ invoice.customer.name if invoice.customer else '-' }}</div>
-          {% if invoice.customer and invoice.customer.email %}
-            <div class="text-muted small">{{ invoice.customer.email }}</div>
+          <h6 class="text-muted mb-1">Customer</h6>
+          {% if invoice.customer %}
+            <div class="fw-semibold">{{ invoice.customer.name }}</div>
+            {% if invoice.customer.email %}
+              <div class="small text-muted">{{ invoice.customer.email }}</div>
+            {% endif %}
+            {% if invoice.customer.address_line1 %}
+              <div class="small text-muted">
+                {{ invoice.customer.address_line1 }}<br>
+                {% if invoice.customer.address_line2 %}
+                  {{ invoice.customer.address_line2 }}<br>
+                {% endif %}
+                {% if invoice.customer.city %}
+                  {{ invoice.customer.city }}
+                {% endif %}
+                {% if invoice.customer.postcode %}
+                  {{ " " ~ invoice.customer.postcode }}
+                {% endif %}
+                {% if invoice.customer.country %}
+                  <br>{{ invoice.customer.country }}
+                {% endif %}
+              </div>
+            {% endif %}
+          {% else %}
+            <div class="text-muted small">No customer information.</div>
           {% endif %}
         </div>
-        <div class="col-md-3">
-          <div class="small-label">Issue date</div>
-          <div>{{ invoice.issue_date }}</div>
-        </div>
-        <div class="col-md-3">
-          <div class="small-label">Due date</div>
-          <div>{{ invoice.due_date or '—' }}</div>
+        <div class="col-md-6">
+          <h6 class="text-muted mb-1">Invoice details</h6>
+          <div class="small">
+            <div class="d-flex justify-content-between">
+              <span>Status</span>
+              <span class="badge
+                  {% if invoice.status == 'paid' %}bg-success
+                  {% elif invoice.status == 'overdue' %}bg-danger
+                  {% elif invoice.status == 'draft' %}bg-secondary
+                  {% else %}bg-primary{% endif %}">
+                {{ invoice.status|capitalize }}
+              </span>
+            </div>
+            <div class="d-flex justify-content-between">
+              <span>Issue date</span>
+              <span>{{ invoice.issue_date }}</span>
+            </div>
+            <div class="d-flex justify-content-between">
+              <span>Due date</span>
+              <span>{{ invoice.due_date }}</span>
+            </div>
+            <div class="d-flex justify-content-between">
+              <span>Tax rate</span>
+              <span>
+                {% if invoice.tax_rate is not none %}
+                  {{ "%.2f"|format(invoice.tax_rate) }}%
+                {% else %}
+                  –
+                {% endif %}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
+
+      <h6 class="mb-2">Line items</h6>
+
+      {% if invoice.items %}
+        <div class="table-responsive">
+          <table class="table table-dark align-middle mb-0">
+            <thead>
+              <tr>
+                <th style="width: 25%;">Product</th>
+                <th style="width: 35%;">Description</th>
+                <th class="text-end" style="width: 10%;">Qty</th>
+                <th class="text-end" style="width: 15%;">Unit price</th>
+                <th class="text-end" style="width: 15%;">Line total</th>
+              </tr>
+            </thead>
+            <tbody>
+            {% for item in invoice.items %}
+              <tr>
+                <td>
+                  {% if item.product %}
+                    {{ item.product.name }}
+                  {% else %}
+                    Manual
+                  {% endif %}
+                </td>
+                <td>{{ item.description }}</td>
+                <td class="text-end">{{ "%.2f"|format(item.quantity) }}</td>
+                <td class="text-end">{{ "%.2f"|format(item.unit_price) }}</td>
+                <td class="text-end">{{ "%.2f"|format(item.line_total) }}</td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="text-muted small">
+          No line items on this invoice.
+        </div>
+      {% endif %}
 
       {% if invoice.notes %}
-      <div class="mt-3">
-        <div class="small-label mb-1">Notes</div>
-        <div class="text-muted">{{ invoice.notes }}</div>
-      </div>
+        <div class="mt-3">
+          <h6 class="text-muted mb-1">Notes</h6>
+          <p class="small mb-0">{{ invoice.notes }}</p>
+        </div>
       {% endif %}
     </div>
 
-    <!-- Line items table -->
+    <!-- Payments -->
     <div class="card-dark p-3 p-md-4">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h5 class="mb-0">Items</h5>
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="mb-0">Payments</h6>
       </div>
 
-      <div class="table-responsive">
-        <table class="table table-dark align-middle mb-0">
-          <thead>
-            <tr>
-              <th>Description</th>
-              <th class="text-end" style="width: 80px;">Qty</th>
-              <th class="text-end" style="width: 120px;">Unit price</th>
-              <th class="text-end" style="width: 120px;">Line total</th>
-            </tr>
-          </thead>
-          <tbody>
-          {% if invoice.items %}
-            {% for item in invoice.items %}
+      {% if invoice.payments %}
+        <div class="table-responsive mb-3">
+          <table class="table table-dark align-middle mb-0">
+            <thead>
               <tr>
-                <td>{{ item.description }}</td>
-                <td class="text-end">{{ '%.2f'|format(item.quantity) }}</td>
-                <td class="text-end">{{ '%.2f'|format(item.unit_price) }}</td>
-                <td class="text-end">{{ '%.2f'|format(item.line_total) }}</td>
+                <th>Date</th>
+                <th>Method</th>
+                <th>Reference</th>
+                <th class="text-end">Amount</th>
               </tr>
-            {% endfor %}
-          {% else %}
-            <tr>
-              <td colspan="4" class="text-center text-muted py-3">
-                No line items on this invoice.
-              </td>
-            </tr>
-          {% endif %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-  </div>
-
-  <!-- Right: totals + payments -->
-  <div class="col-lg-4">
-
-    <!-- Totals card -->
-    <div class="card-dark p-3 p-md-4 mb-4">
-      <h5 class="mb-3">Totals</h5>
-      <div class="d-flex justify-content-between mb-2">
-        <span class="text-muted">Subtotal</span>
-        <span>{{ '%.2f'|format(invoice.subtotal_amount) }}</span>
-      </div>
-      <div class="d-flex justify-content-between mb-2">
-        <span class="text-muted">
-          Tax ({{ '%.2f'|format(invoice.tax_rate or 0) }}%)
-        </span>
-        <span>{{ '%.2f'|format(invoice.tax_amount) }}</span>
-      </div>
-      <hr class="my-2" style="border-color: rgba(31,41,55,0.8);">
-      <div class="d-flex justify-content-between mb-1">
-        <span class="fw-semibold">Total</span>
-        <span class="fw-bold fs-5">{{ '%.2f'|format(invoice.total_amount) }}</span>
-      </div>
-      <div class="d-flex justify-content-between">
-        <span class="text-muted">Balance due</span>
-        <span class="fw-semibold">
-          {{ '%.2f'|format(invoice.balance_due) }}
-        </span>
-      </div>
-    </div>
-
-    <!-- Payments table + add payment -->
-    <div class="card-dark p-3 p-md-4">
-      <h5 class="mb-3">Payments</h5>
-
-      <div class="table-responsive mb-3">
-        <table class="table table-dark align-middle mb-0">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th class="text-end">Amount</th>
-              <th>Method</th>
-              <th>Reference</th>
-            </tr>
-          </thead>
-          <tbody>
-          {% if invoice.payments %}
+            </thead>
+            <tbody>
             {% for p in invoice.payments %}
               <tr>
                 <td>{{ p.payment_date }}</td>
-                <td class="text-end">{{ '%.2f'|format(p.amount) }}</td>
-                <td>{{ p.method or '-' }}</td>
-                <td class="font-mono small">{{ p.external_reference or '—' }}</td>
+                <td>{{ p.method or "-" }}</td>
+                <td>{{ p.external_reference or "-" }}</td>
+                <td class="text-end">{{ "%.2f"|format(p.amount) }}</td>
               </tr>
             {% endfor %}
-          {% else %}
-            <tr>
-              <td colspan="4" class="text-center text-muted py-3">
-                No payments yet.
-              </td>
-            </tr>
-          {% endif %}
-          </tbody>
-        </table>
-      </div>
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="text-muted small mb-2">
+          No payments recorded yet.
+        </div>
+      {% endif %}
 
-      <hr class="my-3" style="border-color: rgba(31,41,55,0.8);">
-
-      <h6 class="mb-2">Add payment</h6>
-      <form method="post" action="{{ url_for('add_payment', invoice_id=invoice.id) }}">
-        <div class="mb-2">
-          <label class="small-label">Amount</label>
-          <input type="number" step="0.01" min="0" name="amount"
-                 class="form-control" required>
+      <form method="post" action="{{ url_for('add_payment', invoice_id=invoice.id) }}" class="row g-2 g-md-3 align-items-end">
+        <div class="col-6 col-md-3">
+          <label class="form-label">Amount</label>
+          <input type="number"
+                 step="0.01"
+                 min="0"
+                 name="amount"
+                 class="form-control"
+                 required>
         </div>
-        <div class="mb-2">
-          <label class="small-label">Payment date</label>
-          <input type="date" name="payment_date" class="form-control" required>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Payment date</label>
+          <input type="date"
+                 name="payment_date"
+                 class="form-control"
+                 value="{{ date.today() }}"
+                 required>
         </div>
-        <div class="mb-2">
-          <label class="small-label">Method</label>
-          <input type="text" name="method" class="form-control"
-                 placeholder="Bank transfer, card, cash…">
+        <div class="col-md-2">
+          <label class="form-label">Method</label>
+          <input type="text"
+                 name="method"
+                 class="form-control"
+                 placeholder="Bank, card...">
         </div>
-        <div class="mb-3">
-          <label class="small-label">Reference</label>
-          <input type="text" name="external_reference" class="form-control"
-                 placeholder="Transaction / reference ID">
+        <div class="col-md-3">
+          <label class="form-label">Reference</label>
+          <input type="text"
+                 name="external_reference"
+                 class="form-control"
+                 placeholder="Txn ID, ref...">
         </div>
-        <div class="d-flex justify-content-end">
+        <div class="col-12 col-md-1 d-grid">
           <button type="submit" class="btn btn-primary">
-            Record payment
+            Add
           </button>
         </div>
       </form>
     </div>
+  </div>
 
+  <div class="col-lg-4">
+    <div class="card-dark p-3 p-md-4">
+      <h5 class="mb-3">Totals</h5>
+      <div class="d-flex justify-content-between mb-2">
+        <span class="text-muted">Subtotal</span>
+        <span>{{ "%.2f"|format(invoice.subtotal_amount) }}</span>
+      </div>
+      <div class="d-flex justify-content-between mb-2">
+        <span class="text-muted">
+          VAT
+          {% if invoice.tax_rate is not none %}
+            ({{ "%.2f"|format(invoice.tax_rate) }}%)
+          {% endif %}
+        </span>
+        <span>{{ "%.2f"|format(invoice.tax_amount) }}</span>
+      </div>
+      <hr class="my-2" style="border-color: rgba(255,255,255,0.1);">
+      <div class="d-flex justify-content-between align-items-center mb-1">
+        <span class="fw-semibold">Total</span>
+        <span class="fw-bold fs-5">{{ "%.2f"|format(invoice.total_amount) }}</span>
+      </div>
+      <div class="d-flex justify-content-between">
+        <span class="text-muted small">Balance due</span>
+        <span class="small">
+          {{ "%.2f"|format(invoice.balance_due) }}
+        </span>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}
