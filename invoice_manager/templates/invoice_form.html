@@ -100,11 +100,16 @@
                       {% for p in products %}
                         <option value="{{ p.id }}"
                                 data-description="{{ p.description|e }}"
-                                data-price="{{ p.unit_price }}">
+                                data-price="{{ p.unit_price }}"
+                                {% if item.product_id == p.id %}selected{% endif %}>
                           {{ p.name }}
                         </option>
                       {% endfor %}
                     </select>
+                    <input type="hidden"
+                           name="item_product_id"
+                           class="product-id-input"
+                           value="{{ item.product_id or '' }}">
                   </td>
                   <td>
                     <input type="text" name="item_description" class="form-control"
@@ -143,6 +148,10 @@
                       </option>
                     {% endfor %}
                   </select>
+                  <input type="hidden"
+                         name="item_product_id"
+                         class="product-id-input"
+                         value="">
                 </td>
                 <td>
                   <input type="text" name="item_description" class="form-control">
@@ -248,6 +257,7 @@
     const priceInput = row.querySelector('input[name="item_unit_price"]');
     const removeBtn = row.querySelector(".remove-line-btn");
     const productSelect = row.querySelector(".product-select");
+    const productIdInput = row.querySelector(".product-id-input");
 
     [qtyInput, priceInput].forEach(input => {
       if (!input) return;
@@ -278,6 +288,11 @@
         if (price) {
           priceInput.value = parseFloat(price).toFixed(2);
         }
+
+        if (productIdInput) {
+          productIdInput.value = selected.value || "";
+        }
+
         recalcTotals();
       });
     }
@@ -301,6 +316,10 @@
           </option>
           {% endfor %}
         </select>
+        <input type="hidden"
+               name="item_product_id"
+               class="product-id-input"
+               value="">
       </td>
       <td>
         <input type="text" name="item_description" class="form-control">
