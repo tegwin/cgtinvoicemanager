@@ -1,12 +1,11 @@
 import os
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from decimal import Decimal
 import csv
 import io
 from secrets import token_hex
 
 import requests
-
 from flask import (
     Flask, render_template, request, redirect, url_for,
     flash, jsonify, abort, session
@@ -18,17 +17,19 @@ from flask_login import (
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 
-# -------------------------------------------------
+
+# -----------------------
 # Config & setup
-# -------------------------------------------------
+# -----------------------
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 
+# IMPORTANT: this relies on DATABASE_URL from docker-compose.
+# In your compose we set DATABASE_URL to use the db container & invoicemgr user.
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
     "DATABASE_URL",
-    # Docker compose default
-    "mysql+pymysql://invoicemgr:invoicemgr@db/invoicemanager"
+    "mysql+pymysql://root:password@localhost/invoicemanager"
 )
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
@@ -38,19 +39,19 @@ login_manager = LoginManager(app)
 login_manager.login_view = "login"
 
 
-# -------------------------------------------------
+# -----------------------
 # Models
-# -------------------------------------------------
+# -----------------------
 
 class User(UserMixin, db.Model):
     __tablename__ = "users"
 
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(100), unique=True, nullable=False)
+    username = db.Column(db.String(150), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    is_admin = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
-    def set_password(self, password: str) -> None:
+    def set_password(self, password: str):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password: str) -> bool:
@@ -75,7 +76,8 @@ class Customer(db.Model):
     postcode = db.Column(db.String(50))
     country = db.Column(db.String(100))
 
-    tax_rate = db.Column(db.Numeric(5, 2))
+    # Tax settings
+    tax_rate = db.Column(db.Numeric(5, 2))  # percentage, e.g. 20.00
     use_default_tax = db.Column(db.Boolean, nullable=False, default=True)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -98,15 +100,11 @@ class Product(db.Model):
     description = db.Column(db.Text)
     unit_price = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     active = db.Column(db.Boolean, nullable=False, default=True)
-
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(
-        db.DateTime, nullable=False,
-        default=datetime.utcnow, onupdate=datetime.utcnow
+        db.DateTime, default=datetime.utcnow,
+        onupdate=datetime.utcnow, nullable=False
     )
-
-    def __repr__(self):
-        return f"<Product {self.id} {self.name}>"
 
 
 class Invoice(db.Model):
@@ -116,16 +114,15 @@ class Invoice(db.Model):
     customer_id = db.Column(db.Integer, db.ForeignKey("customers.id"), nullable=False)
     invoice_number = db.Column(db.String(50), unique=True, nullable=False)
     issue_date = db.Column(db.Date, nullable=False)
-    due_date = db.Column(db.Date)
-    status = db.Column(
-        db.Enum("draft", "sent", "paid", "overdue", "cancelled",
-                name="invoice_status"),
-        nullable=False, default="draft"
-    )
+    due_date = db.Column(db.Date, nullable=False)
+    status = db.Column(db.Enum("draft", "sent", "paid", "overdue", "cancelled",
+                               name="invoice_status"),
+                       nullable=False, default="draft")
     notes = db.Column(db.Text)
 
+    # Money
     subtotal_amount = db.Column(db.Numeric(10, 2), nullable=False, default=0)
-    tax_rate = db.Column(db.Numeric(5, 2))
+    tax_rate = db.Column(db.Numeric(5, 2))  # percentage e.g. 20.00
     tax_amount = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     total_amount = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     balance_due = db.Column(db.Numeric(10, 2), nullable=False, default=0)
@@ -137,14 +134,10 @@ class Invoice(db.Model):
     )
 
     customer = db.relationship("Customer", back_populates="invoices")
-    items = db.relationship(
-        "InvoiceItem", back_populates="invoice",
-        cascade="all, delete-orphan"
-    )
-    payments = db.relationship(
-        "Payment", back_populates="invoice",
-        cascade="all, delete-orphan"
-    )
+    items = db.relationship("InvoiceItem", back_populates="invoice",
+                            cascade="all, delete-orphan")
+    payments = db.relationship("Payment", back_populates="invoice",
+                               cascade="all, delete-orphan")
 
     def recalc_totals(self):
         subtotal = sum((item.line_total for item in self.items), Decimal("0.00"))
@@ -162,7 +155,7 @@ class Invoice(db.Model):
 
         if self.balance_due <= 0 and total > 0:
             self.status = "paid"
-        elif self.due_date and date.today() > self.due_date and self.status not in ("paid", "cancelled"):
+        elif date.today() > self.due_date and self.status not in ("paid", "cancelled"):
             self.status = "overdue"
         else:
             if self.status not in ("cancelled", "paid"):
@@ -175,7 +168,7 @@ class Invoice(db.Model):
             "customer_id": self.customer_id,
             "customer_name": self.customer.name if self.customer else None,
             "issue_date": self.issue_date.isoformat(),
-            "due_date": self.due_date.isoformat() if self.due_date else None,
+            "due_date": self.due_date.isoformat(),
             "status": self.status,
             "notes": self.notes,
             "subtotal_amount": float(self.subtotal_amount),
@@ -198,7 +191,9 @@ class InvoiceItem(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     invoice_id = db.Column(db.Integer, db.ForeignKey("invoices.id"), nullable=False)
-    product_id = db.Column(db.Integer, db.ForeignKey("products.id"))
+    # product linkage to support persistence on edit
+    product_id = db.Column(db.Integer, db.ForeignKey("products.id"), nullable=True)
+
     description = db.Column(db.String(255), nullable=False)
     quantity = db.Column(db.Numeric(10, 2), nullable=False)
     unit_price = db.Column(db.Numeric(10, 2), nullable=False)
@@ -210,7 +205,6 @@ class InvoiceItem(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "invoice_id": self.invoice_id,
             "product_id": self.product_id,
             "product_name": self.product.name if self.product else None,
             "description": self.description,
@@ -253,15 +247,17 @@ class Settings(db.Model):
                                  nullable=False,
                                  default=Decimal("0.00"))
 
+    # Outbound webhook config
     outbound_webhook_url = db.Column(db.String(500))
     outbound_webhook_enabled = db.Column(db.Boolean, nullable=False, default=False)
-    # comma-separated list of event names
-    outbound_webhook_events = db.Column(db.String(255), nullable=False,
-                                        default="invoice.created,invoice.updated,payment.recorded")
+    # comma-separated event list, e.g. "invoice.created,invoice.updated,payment.recorded"
+    outbound_webhook_events = db.Column(db.String(255), nullable=True)
 
-    brand_name = db.Column(db.String(255))
-    logo_url = db.Column(db.String(500))
+    # Branding
+    brand_name = db.Column(db.String(255), nullable=True)
+    logo_url = db.Column(db.String(500), nullable=True)
 
+    # Payment terms
     payment_terms_days = db.Column(db.Integer, nullable=False, default=0)
     use_global_payment_terms = db.Column(db.Boolean, nullable=False, default=False)
 
@@ -277,9 +273,9 @@ class APIKey(db.Model):
     last_used_at = db.Column(db.DateTime)
 
 
-# -------------------------------------------------
+# -----------------------
 # Helpers
-# -------------------------------------------------
+# -----------------------
 
 def generate_api_key_value():
     return token_hex(32)
@@ -316,47 +312,37 @@ def generate_invoice_number():
 
 
 def get_settings():
+    """
+    Ensure there is exactly one settings row with id=1.
+    """
     settings = Settings.query.get(1)
     if not settings:
         settings = Settings(
             id=1,
             default_tax_rate=Decimal("0.00"),
             outbound_webhook_enabled=False,
+            outbound_webhook_url=None,
             outbound_webhook_events="invoice.created,invoice.updated,payment.recorded",
+            brand_name="Invoice Manager",
+            logo_url=None,
             payment_terms_days=0,
             use_global_payment_terms=False,
         )
         db.session.add(settings)
         db.session.commit()
+    return settings
 
-        @app.context_processor
+
+@app.context_processor
 def inject_settings():
     """
-    Make `settings` available in EVERY template automatically.
-    This fixes 'settings is undefined' errors in base.html, invoices_list.html, etc.
+    This makes `settings` available in ALL templates (fixes 'settings is undefined').
     """
     try:
         return {"settings": get_settings()}
     except Exception:
-        # In case DB isn't ready during initial setup, don't break the whole app
+        # If something goes wrong during very early startup, don't hard-crash templates.
         return {"settings": None}
-
-
-    # ensure new columns have defaults if DB was older
-    changed = False
-    if settings.outbound_webhook_events is None:
-        settings.outbound_webhook_events = "invoice.created,invoice.updated,payment.recorded"
-        changed = True
-    if settings.payment_terms_days is None:
-        settings.payment_terms_days = 0
-        changed = True
-    if settings.use_global_payment_terms is None:
-        settings.use_global_payment_terms = False
-        changed = True
-    if changed:
-        db.session.commit()
-
-    return settings
 
 
 def determine_tax_rate_for_customer(customer):
@@ -368,31 +354,18 @@ def determine_tax_rate_for_customer(customer):
     return customer.tax_rate
 
 
-def apply_global_due_date(issue_date: date, settings: Settings) -> date | None:
-    if not settings.use_global_payment_terms or not settings.payment_terms_days:
-        return None
-    try:
-        days = int(settings.payment_terms_days)
-    except Exception:
-        return None
-    return issue_date + datetime.timedelta(days=days)
-
-
 def send_outbound_webhook(event_type: str, payload: dict):
     """
-    Send a JSON webhook to the configured outbound_webhook_url.
-    Obeys enabled flag and selected events.
-    Never raises back to the caller – errors are just printed.
+    Send a JSON webhook to the configured outbound_webhook_url (if enabled),
+    respecting the selected outbound_webhook_events list.
     """
     settings = get_settings()
     if not settings.outbound_webhook_enabled or not settings.outbound_webhook_url:
         return
 
-    # filter events
-    allowed = [
-        e.strip() for e in (settings.outbound_webhook_events or "").split(",")
-        if e.strip()
-    ]
+    # Restrict to selected events
+    events_raw = settings.outbound_webhook_events or ""
+    allowed = {e.strip() for e in events_raw.split(",") if e.strip()}
     if allowed and event_type not in allowed:
         return
 
@@ -413,25 +386,34 @@ def send_outbound_webhook(event_type: str, payload: dict):
         print(f"[webhook] Error sending {event_type} → {settings.outbound_webhook_url}: {e}")
 
 
-# -------------------------------------------------
-# Auth routes
-# -------------------------------------------------
+# -----------------------
+# Auth & base routes
+# -----------------------
+
+@app.route("/")
+@login_required
+def index():
+    return redirect(url_for("list_invoices"))
+
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for("list_invoices"))
+        return redirect(url_for("index"))
 
     if request.method == "POST":
         username = (request.form.get("username") or "").strip()
         password = request.form.get("password") or ""
+
         user = User.query.filter_by(username=username).first()
-        if user and user.check_password(password):
-            login_user(user)
-            flash("Logged in", "success")
-            next_url = request.args.get("next") or url_for("list_invoices")
-            return redirect(next_url)
-        flash("Invalid username or password", "danger")
+        if not user or not user.check_password(password):
+            flash("Invalid username or password", "danger")
+            return render_template("login.html")
+
+        login_user(user, remember=True)
+        flash("Logged in successfully", "success")
+        next_url = request.args.get("next") or url_for("index")
+        return redirect(next_url)
 
     return render_template("login.html")
 
@@ -444,25 +426,16 @@ def logout():
     return redirect(url_for("login"))
 
 
-# -------------------------------------------------
-# Web UI routes
-# -------------------------------------------------
-
-@app.route("/")
-@login_required
-def index():
-    return redirect(url_for("list_invoices"))
-
-
-# Settings ------------------------------------------------
+# -----------------------
+# Settings
+# -----------------------
 
 @app.route("/settings", methods=["GET", "POST"])
 @login_required
 def settings_view():
     settings = get_settings()
-
     if request.method == "POST":
-        # default tax
+        # Default tax rate
         rate_str = (request.form.get("default_tax_rate") or "").strip()
         try:
             settings.default_tax_rate = Decimal(rate_str or "0")
@@ -470,47 +443,50 @@ def settings_view():
             flash("Invalid tax rate", "danger")
             return redirect(url_for("settings_view"))
 
-        # payment terms
-        settings.use_global_payment_terms = bool(request.form.get("use_global_terms"))
-        days_str = (request.form.get("payment_terms_days") or "").strip()
-        try:
-            settings.payment_terms_days = int(days_str or "0")
-        except Exception:
-            settings.payment_terms_days = 0
-
-        # outbound webhook config
-        settings.outbound_webhook_enabled = bool(
-            request.form.get("outbound_webhook_enabled")
-        )
+        # Outbound webhook config
+        settings.outbound_webhook_enabled = bool(request.form.get("outbound_webhook_enabled"))
         settings.outbound_webhook_url = (request.form.get("outbound_webhook_url") or "").strip() or None
 
-        selected_events = request.form.getlist("webhook_events")
-        settings.outbound_webhook_events = ",".join(selected_events)
+        selected_events = request.form.getlist("outbound_webhook_events")
+        settings.outbound_webhook_events = ",".join(selected_events) if selected_events else None
+
+        # Branding
+        settings.brand_name = (request.form.get("brand_name") or "").strip() or None
+        settings.logo_url = (request.form.get("logo_url") or "").strip() or None
+
+        # Global payment terms
+        use_global_terms = bool(request.form.get("use_global_payment_terms"))
+        settings.use_global_payment_terms = use_global_terms
+        if use_global_terms:
+            try:
+                days = int(request.form.get("payment_terms_days") or "0")
+            except ValueError:
+                days = 0
+            settings.payment_terms_days = max(days, 0)
 
         db.session.commit()
         flash("Settings saved", "success")
         return redirect(url_for("settings_view"))
 
-    selected_events = (
-        (settings.outbound_webhook_events or "").split(",")
-        if settings.outbound_webhook_events else []
-    )
-    selected_events = [e.strip() for e in selected_events if e.strip()]
-
-    return render_template(
-        "settings.html",
-        settings=settings,
-        webhook_events_selected=selected_events,
-    )
+    return render_template("settings.html", settings=settings)
 
 
-# API Keys management --------------------------------------
+# -----------------------
+# API Keys
+# -----------------------
 
 @app.route("/api-keys")
 @login_required
 def api_keys_list():
     api_keys = APIKey.query.order_by(APIKey.created_at.desc()).all()
-    return render_template("api_keys_list.html", api_keys=api_keys)
+    new_key_value = session.pop("new_api_key", None)
+    new_key_name = session.pop("new_api_key_name", None)
+    return render_template(
+        "api_keys_list.html",
+        api_keys=api_keys,
+        new_key_value=new_key_value,
+        new_key_name=new_key_name,
+    )
 
 
 @app.route("/api-keys/new", methods=["GET", "POST"])
@@ -519,6 +495,7 @@ def api_keys_new():
     if request.method == "POST":
         name = (request.form.get("name") or "").strip()
         key_value = (request.form.get("key") or "").strip()
+
         if not name:
             flash("Name is required", "danger")
             return render_template("api_key_form.html", api_key=None)
@@ -534,6 +511,7 @@ def api_keys_new():
         db.session.add(api_key)
         db.session.commit()
 
+        # Store in session to show full key ONCE
         session["new_api_key"] = key_value
         session["new_api_key_name"] = name
 
@@ -566,10 +544,13 @@ def api_keys_delete(key_id):
 @app.route("/api/docs")
 @login_required
 def api_docs():
+    # Just renders docs; no key shown here
     return render_template("api_docs.html")
 
 
-# Customers -----------------------------------------------
+# -----------------------
+# Customers
+# -----------------------
 
 @app.route("/customers")
 @login_required
@@ -654,7 +635,9 @@ def edit_customer(customer_id):
     return render_template("customer_form.html", customer=customer)
 
 
-# Products -----------------------------------------------
+# -----------------------
+# Products
+# -----------------------
 
 @app.route("/products")
 @login_required
@@ -668,24 +651,25 @@ def list_products():
 def new_product():
     if request.method == "POST":
         name = (request.form.get("name") or "").strip()
-        desc = (request.form.get("description") or "").strip()
-        price_str = (request.form.get("unit_price") or "").strip()
-
         if not name:
-            flash("Product name is required", "danger")
+            flash("Name is required", "danger")
             return render_template("product_form.html", product=None)
 
+        description = (request.form.get("description") or "").strip()
+        price_str = (request.form.get("unit_price") or "0").strip()
         try:
-            price = Decimal(price_str or "0")
+            unit_price = Decimal(price_str or "0")
         except Exception:
-            flash("Invalid unit price", "danger")
+            flash("Invalid price", "danger")
             return render_template("product_form.html", product=None)
+
+        active = bool(request.form.get("active"))
 
         product = Product(
             name=name,
-            description=desc,
-            unit_price=price,
-            active=True,
+            description=description or None,
+            unit_price=unit_price,
+            active=active,
         )
         db.session.add(product)
         db.session.commit()
@@ -702,24 +686,21 @@ def edit_product(product_id):
 
     if request.method == "POST":
         name = (request.form.get("name") or "").strip()
-        desc = (request.form.get("description") or "").strip()
-        price_str = (request.form.get("unit_price") or "").strip()
-        active = bool(request.form.get("active"))
-
         if not name:
-            flash("Product name is required", "danger")
-            return render_template("product_form.html", product=product)
-
-        try:
-            price = Decimal(price_str or "0")
-        except Exception:
-            flash("Invalid unit price", "danger")
+            flash("Name is required", "danger")
             return render_template("product_form.html", product=product)
 
         product.name = name
-        product.description = desc
-        product.unit_price = price
-        product.active = active
+        product.description = (request.form.get("description") or "").strip() or None
+
+        price_str = (request.form.get("unit_price") or "0").strip()
+        try:
+            product.unit_price = Decimal(price_str or "0")
+        except Exception:
+            flash("Invalid price", "danger")
+            return render_template("product_form.html", product=product)
+
+        product.active = bool(request.form.get("active"))
 
         db.session.commit()
         flash("Product updated", "success")
@@ -728,20 +709,33 @@ def edit_product(product_id):
     return render_template("product_form.html", product=product)
 
 
-# Invoices -----------------------------------------------
+@app.route("/products/<int:product_id>/toggle", methods=["POST"])
+@login_required
+def toggle_product(product_id):
+    product = Product.query.get_or_404(product_id)
+    product.active = not product.active
+    db.session.commit()
+    flash("Product status updated", "success")
+    return redirect(url_for("list_products"))
+
+
+# -----------------------
+# Invoices
+# -----------------------
 
 @app.route("/invoices")
 @login_required
 def list_invoices():
-    status_filter = request.args.get("status") or "open"
-    q = Invoice.query
+    status_filter = request.args.get("status")
+    query = Invoice.query.order_by(Invoice.created_at.desc())
 
-    if status_filter == "open":
-        q = q.filter(Invoice.status.in_(["draft", "sent", "overdue"]))
-    elif status_filter in ["draft", "sent", "paid", "overdue", "cancelled"]:
-        q = q.filter_by(status=status_filter)
+    if status_filter:
+        if status_filter == "open":
+            query = query.filter(Invoice.status.in_(("draft", "sent", "overdue")))
+        else:
+            query = query.filter(Invoice.status == status_filter)
 
-    invoices = q.order_by(Invoice.created_at.desc()).all()
+    invoices = query.all()
     return render_template("invoices_list.html", invoices=invoices, status_filter=status_filter)
 
 
@@ -750,18 +744,11 @@ def list_invoices():
 def new_invoice():
     customers = Customer.query.order_by(Customer.name).all()
     products = Product.query.filter_by(active=True).order_by(Product.name).all()
-    settings = get_settings()
 
     if request.method == "POST":
-        return handle_invoice_form(customers, products, settings)
+        return handle_invoice_form(customers, products)
 
-    return render_template(
-        "invoice_form.html",
-        invoice=None,
-        customers=customers,
-        products=products,
-        settings=settings,
-    )
+    return render_template("invoice_form.html", invoice=None, customers=customers, products=products)
 
 
 @app.route("/invoices/<int:invoice_id>/edit", methods=["GET", "POST"])
@@ -770,72 +757,42 @@ def edit_invoice(invoice_id):
     invoice = Invoice.query.get_or_404(invoice_id)
     customers = Customer.query.order_by(Customer.name).all()
     products = Product.query.filter_by(active=True).order_by(Product.name).all()
-    settings = get_settings()
 
     if request.method == "POST":
-        return handle_invoice_form(customers, products, settings, invoice)
+        return handle_invoice_form(customers, products, invoice)
 
-    return render_template(
-        "invoice_form.html",
-        invoice=invoice,
-        customers=customers,
-        products=products,
-        settings=settings,
-    )
+    return render_template("invoice_form.html", invoice=invoice, customers=customers, products=products)
 
 
-def handle_invoice_form(customers, products, settings, invoice=None):
+def handle_invoice_form(customers, products, invoice=None):
     is_new = invoice is None
 
     customer_id = request.form.get("customer_id")
     issue_date_str = request.form.get("issue_date")
-    due_date_str = request.form.get("due_date") or ""
-
+    due_date_str = request.form.get("due_date")
     status = request.form.get("status") or "draft"
     notes = request.form.get("notes")
 
     try:
         issue_date = datetime.strptime(issue_date_str, "%Y-%m-%d").date()
-    except Exception:
-        flash("Invalid issue date", "danger")
-        return render_template(
-            "invoice_form.html",
-            invoice=invoice,
-            customers=customers,
-            products=products,
-            settings=settings,
-        )
-
-    if due_date_str:
-        try:
+        if due_date_str:
             due_date = datetime.strptime(due_date_str, "%Y-%m-%d").date()
-        except Exception:
-            flash("Invalid due date", "danger")
-            return render_template(
-                "invoice_form.html",
-                invoice=invoice,
-                customers=customers,
-                products=products,
-                settings=settings,
-            )
-    else:
-        # optional – you can extend this later to auto-calc based on settings
-        due_date = None
+        else:
+            # Use global payment terms if configured
+            settings = get_settings()
+            if settings.use_global_payment_terms and settings.payment_terms_days > 0:
+                due_date = issue_date + timedelta(days=settings.payment_terms_days)
+            else:
+                due_date = issue_date
+    except Exception:
+        flash("Invalid dates", "danger")
+        return render_template("invoice_form.html", invoice=invoice, customers=customers, products=products)
 
     customer = Customer.query.get(int(customer_id)) if customer_id else None
-    if not customer:
-        flash("Customer is required", "danger")
-        return render_template(
-            "invoice_form.html",
-            invoice=invoice,
-            customers=customers,
-            products=products,
-            settings=settings,
-        )
 
     if not invoice:
         invoice = Invoice(
-            customer_id=customer.id,
+            customer_id=customer_id,
             invoice_number=generate_invoice_number(),
             issue_date=issue_date,
             due_date=due_date,
@@ -844,7 +801,7 @@ def handle_invoice_form(customers, products, settings, invoice=None):
         )
         db.session.add(invoice)
     else:
-        invoice.customer_id = customer.id
+        invoice.customer_id = customer_id
         invoice.issue_date = issue_date
         invoice.due_date = due_date
         invoice.status = status
@@ -853,18 +810,15 @@ def handle_invoice_form(customers, products, settings, invoice=None):
 
     invoice.tax_rate = determine_tax_rate_for_customer(customer)
 
-    product_ids = request.form.getlist("item_product_id")
     descriptions = request.form.getlist("item_description")
     quantities = request.form.getlist("item_quantity")
     unit_prices = request.form.getlist("item_unit_price")
+    product_ids = request.form.getlist("item_product_id")
 
-    for prod_id_str, desc, qty_str, price_str in zip(
-        product_ids, descriptions, quantities, unit_prices
-    ):
+    for desc, qty_str, price_str, product_id_str in zip(descriptions, quantities, unit_prices, product_ids):
         desc = (desc or "").strip()
-        prod_id = int(prod_id_str) if prod_id_str else None
-
-        if not desc and not prod_id:
+        # If no desc AND no product, skip
+        if not desc and not product_id_str:
             continue
 
         try:
@@ -873,17 +827,12 @@ def handle_invoice_form(customers, products, settings, invoice=None):
         except Exception:
             continue
 
-        if qty == 0 and price == 0:
-            continue
-
-        product = Product.query.get(prod_id) if prod_id else None
-        if product and not desc:
-            desc = product.name
-
+        product_id = int(product_id_str) if product_id_str else None
         line_total = qty * price
+
         item = InvoiceItem(
             invoice=invoice,
-            product=product,
+            product_id=product_id,
             description=desc,
             quantity=qty,
             unit_price=price,
@@ -894,6 +843,7 @@ def handle_invoice_form(customers, products, settings, invoice=None):
     invoice.recalc_totals()
     db.session.commit()
 
+    # 🔔 outbound webhook
     try:
         event_name = "invoice.created" if is_new else "invoice.updated"
         send_outbound_webhook(event_name, invoice.to_dict())
@@ -908,19 +858,7 @@ def handle_invoice_form(customers, products, settings, invoice=None):
 @login_required
 def invoice_detail(invoice_id):
     invoice = Invoice.query.get_or_404(invoice_id)
-    settings = get_settings()
-    return render_template("invoice_detail.html", invoice=invoice, settings=settings)
-
-
-@app.route("/invoices/<int:invoice_id>/print")
-@login_required
-def invoice_print(invoice_id):
-    """
-    Clean HTML invoice suitable for emailing or 'Print to PDF'.
-    """
-    invoice = Invoice.query.get_or_404(invoice_id)
-    settings = get_settings()
-    return render_template("invoice_print.html", invoice=invoice, settings=settings)
+    return render_template("invoice_detail.html", invoice=invoice)
 
 
 @app.route("/invoices/<int:invoice_id>/payments/new", methods=["POST"])
@@ -951,6 +889,7 @@ def add_payment(invoice_id):
     invoice.recalc_totals()
     db.session.commit()
 
+    # 🔔 outbound webhook
     try:
         send_outbound_webhook(
             "payment.recorded",
@@ -966,31 +905,443 @@ def add_payment(invoice_id):
     return redirect(url_for("invoice_detail", invoice_id=invoice.id))
 
 
-# -------------------------------------------------
-# CSV Import (unchanged from before)
-# -------------------------------------------------
-# (keeping behaviour the same – not repeating here for brevity in this explanation)
-# Make sure you keep your existing import_customers and import_invoices
-# functions below this comment in your real file.
+# -----------------------
+# CSV Import
+# -----------------------
+
+@app.route("/import/customers", methods=["GET", "POST"])
+@login_required
+def import_customers():
+    if request.method == "GET":
+        return render_template("import_customers.html")
+
+    file = request.files.get("file")
+    if not file or file.filename == "":
+        flash("Please choose a CSV file.", "danger")
+        return redirect(url_for("import_customers"))
+
+    try:
+        content = file.read().decode("utf-8-sig")
+        f = io.StringIO(content)
+        reader = csv.DictReader(f)
+    except Exception as e:
+        flash(f"Could not read CSV file: {e}", "danger")
+        return redirect(url_for("import_customers"))
+
+    if not reader.fieldnames:
+        flash("CSV file has no header row.", "danger")
+        return redirect(url_for("import_customers"))
+
+    required = ["name"]
+    missing = [c for c in required if c not in reader.fieldnames]
+    if missing:
+        flash(f"Missing required columns: {', '.join(missing)}", "danger")
+        return redirect(url_for("import_customers"))
+
+    created = 0
+    updated = 0
+
+    for row in reader:
+        name = (row.get("name") or "").strip()
+        if not name:
+            continue
+
+        email = (row.get("email") or "").strip() or None
+
+        customer = None
+        if email:
+            customer = Customer.query.filter_by(email=email).first()
+
+        use_default_tax = True
+        tax_rate = None
+
+        if customer:
+            customer.name = name
+            customer.phone = (row.get("phone") or "").strip() or None
+            customer.address_line1 = (row.get("address_line1") or "").strip() or None
+            customer.address_line2 = (row.get("address_line2") or "").strip() or None
+            customer.city = (row.get("city") or "").strip() or None
+            customer.postcode = (row.get("postcode") or "").strip() or None
+            customer.country = (row.get("country") or "").strip() or None
+            customer.use_default_tax = use_default_tax
+            customer.tax_rate = tax_rate
+            updated += 1
+        else:
+            customer = Customer(
+                name=name,
+                email=email,
+                phone=(row.get("phone") or "").strip() or None,
+                address_line1=(row.get("address_line1") or "").strip() or None,
+                address_line2=(row.get("address_line2") or "").strip() or None,
+                city=(row.get("city") or "").strip() or None,
+                postcode=(row.get("postcode") or "").strip() or None,
+                country=(row.get("country") or "").strip() or None,
+                use_default_tax=use_default_tax,
+                tax_rate=tax_rate,
+            )
+            db.session.add(customer)
+            created += 1
+
+    db.session.commit()
+    flash(f"Imported customers. Created: {created}, Updated: {updated}", "success")
+    return redirect(url_for("list_customers"))
 
 
-# -------------------------------------------------
-# API endpoints
-# -------------------------------------------------
-# (for now unchanged; next step we can expand to full GET/POST/PUT
-# for customers/products/invoices/payments etc.)
+@app.route("/import/invoices", methods=["GET", "POST"])
+@login_required
+def import_invoices():
+    if request.method == "GET":
+        return render_template("import_invoices.html")
 
-# -------------------------------------------------
+    file = request.files.get("file")
+    if not file or file.filename == "":
+        flash("Please choose a CSV file.", "danger")
+        return redirect(url_for("import_invoices"))
+
+    try:
+        content = file.read().decode("utf-8-sig")
+        f = io.StringIO(content)
+        reader = csv.DictReader(f)
+    except Exception as e:
+        flash(f"Could not read CSV file: {e}", "danger")
+        return redirect(url_for("import_invoices"))
+
+    if not reader.fieldnames:
+        flash("CSV file has no header row.", "danger")
+        return redirect(url_for("import_invoices"))
+
+    required = [
+        "issue_date", "due_date",
+        "item_description", "item_quantity", "item_unit_price"
+    ]
+    missing = [c for c in required if c not in reader.fieldnames]
+    if missing:
+        flash(f"Missing required columns: {', '.join(missing)}", "danger")
+        return redirect(url_for("import_invoices"))
+
+    count = 0
+    errors = 0
+
+    for row in reader:
+        try:
+            customer_email = (row.get("customer_email") or "").strip() or None
+            customer_name = (row.get("customer_name") or "").strip() or None
+
+            if not (customer_email or customer_name):
+                errors += 1
+                continue
+
+            customer = None
+            if customer_email:
+                customer = Customer.query.filter_by(email=customer_email).first()
+
+            if not customer:
+                if not customer_name:
+                    errors += 1
+                    continue
+                customer = Customer(
+                    name=customer_name,
+                    email=customer_email,
+                )
+                db.session.add(customer)
+                db.session.flush()
+
+            issue_date = datetime.strptime(row["issue_date"], "%Y-%m-%d").date()
+            due_date = datetime.strptime(row["due_date"], "%Y-%m-%d").date()
+
+            status = (row.get("status") or "sent").strip() or "sent"
+            if status not in ["draft", "sent", "paid", "overdue", "cancelled"]:
+                status = "sent"
+
+            notes = (row.get("notes") or "").strip() or None
+
+            invoice_number = (row.get("invoice_number") or "").strip()
+            if not invoice_number:
+                invoice_number = generate_invoice_number()
+
+            invoice = Invoice(
+                customer=customer,
+                invoice_number=invoice_number,
+                issue_date=issue_date,
+                due_date=due_date,
+                status=status,
+                notes=notes,
+            )
+            invoice.tax_rate = determine_tax_rate_for_customer(customer)
+
+            db.session.add(invoice)
+            db.session.flush()
+
+            desc = (row.get("item_description") or "").strip()
+            if not desc:
+                errors += 1
+                continue
+
+            qty = Decimal(str(row.get("item_quantity", "0")))
+            price = Decimal(str(row.get("item_unit_price", "0")))
+            line_total = qty * price
+
+            item = InvoiceItem(
+                invoice=invoice,
+                description=desc,
+                quantity=qty,
+                unit_price=price,
+                line_total=line_total,
+            )
+            db.session.add(item)
+
+            invoice.recalc_totals()
+            count += 1
+
+        except Exception:
+            errors += 1
+            continue
+
+    db.session.commit()
+
+    flash(f"Imported {count} invoices. {errors} rows skipped due to errors.", "success")
+    return redirect(url_for("list_invoices"))
+
+
+# -----------------------
+# API endpoints (invoices + payment webhook)
+# -----------------------
+
+@app.route("/api/invoices", methods=["POST"])
+def api_create_invoice():
+    require_api_key()
+    data = request.get_json(force=True)
+
+    customer_id = data.get("customer_id")
+    customer_data = data.get("customer")
+
+    if customer_id:
+        customer = Customer.query.get(customer_id)
+        if not customer:
+            return jsonify({"error": "customer_id not found"}), 400
+    elif customer_data:
+        name = (customer_data.get("name") or "").strip()
+        if not name:
+            return jsonify({"error": "customer.name is required"}), 400
+
+        use_default_tax = customer_data.get("use_default_tax", True)
+        tax_rate = customer_data.get("tax_rate", None)
+        tax_rate_dec = None
+        if tax_rate is not None:
+            try:
+                tax_rate_dec = Decimal(str(tax_rate))
+            except Exception:
+                tax_rate_dec = None
+
+        customer = Customer(
+            name=name,
+            email=customer_data.get("email"),
+            phone=customer_data.get("phone"),
+            address_line1=customer_data.get("address_line1"),
+            address_line2=customer_data.get("address_line2"),
+            city=customer_data.get("city"),
+            postcode=customer_data.get("postcode"),
+            country=customer_data.get("country"),
+            use_default_tax=use_default_tax,
+            tax_rate=None if use_default_tax else tax_rate_dec,
+        )
+        db.session.add(customer)
+        db.session.flush()
+    else:
+        return jsonify({"error": "customer_id or customer object required"}), 400
+
+    try:
+        issue_date = datetime.strptime(data["issue_date"], "%Y-%m-%d").date()
+        due_date = datetime.strptime(data["due_date"], "%Y-%m-%d").date()
+    except Exception:
+        return jsonify({"error": "issue_date and due_date must be YYYY-MM-DD"}), 400
+
+    invoice = Invoice(
+        customer=customer,
+        invoice_number=data.get("invoice_number") or generate_invoice_number(),
+        issue_date=issue_date,
+        due_date=due_date,
+        status=data.get("status", "sent"),
+        notes=data.get("notes"),
+    )
+
+    if "tax_rate" in data and data["tax_rate"] is not None:
+        try:
+            invoice.tax_rate = Decimal(str(data["tax_rate"]))
+        except Exception:
+            invoice.tax_rate = determine_tax_rate_for_customer(customer)
+    else:
+        invoice.tax_rate = determine_tax_rate_for_customer(customer)
+
+    db.session.add(invoice)
+
+    items_data = data.get("items", [])
+    if not items_data:
+        return jsonify({"error": "At least one item is required"}), 400
+
+    for item_data in items_data:
+        desc = (item_data.get("description") or "").strip()
+        if not desc:
+            continue
+        qty = Decimal(str(item_data.get("quantity", "0")))
+        price = Decimal(str(item_data.get("unit_price", "0")))
+        line_total = qty * price
+        product_id = item_data.get("product_id")
+
+        db.session.add(InvoiceItem(
+            invoice=invoice,
+            product_id=product_id,
+            description=desc,
+            quantity=qty,
+            unit_price=price,
+            line_total=line_total,
+        ))
+
+    invoice.recalc_totals()
+    db.session.commit()
+
+    return jsonify(invoice.to_dict()), 201
+
+
+@app.route("/api/invoices/<int:invoice_id>", methods=["GET"])
+def api_get_invoice(invoice_id):
+    require_api_key()
+    invoice = Invoice.query.get_or_404(invoice_id)
+    return jsonify(invoice.to_dict())
+
+
+@app.route("/api/invoices/<int:invoice_id>", methods=["PUT"])
+def api_update_invoice(invoice_id):
+    require_api_key()
+    invoice = Invoice.query.get_or_404(invoice_id)
+    data = request.get_json(force=True)
+
+    if "customer_id" in data:
+        customer_id = data.get("customer_id")
+        if customer_id:
+            customer = Customer.query.get(customer_id)
+            if not customer:
+                return jsonify({"error": "customer_id not found"}), 400
+            invoice.customer_id = customer_id
+            if "tax_rate" not in data:
+                invoice.tax_rate = determine_tax_rate_for_customer(customer)
+
+    if "issue_date" in data:
+        try:
+            invoice.issue_date = datetime.strptime(
+                data["issue_date"], "%Y-%m-%d"
+            ).date()
+        except Exception:
+            return jsonify({"error": "invalid issue_date"}), 400
+
+    if "due_date" in data:
+        try:
+            invoice.due_date = datetime.strptime(
+                data["due_date"], "%Y-%m-%d"
+            ).date()
+        except Exception:
+            return jsonify({"error": "invalid due_date"}), 400
+
+    if "status" in data and data["status"] in ["draft", "sent", "paid", "overdue", "cancelled"]:
+        invoice.status = data["status"]
+
+    if "notes" in data:
+        invoice.notes = data["notes"]
+
+    if "tax_rate" in data:
+        if data["tax_rate"] is None:
+            customer = invoice.customer
+            invoice.tax_rate = determine_tax_rate_for_customer(customer)
+        else:
+            try:
+                invoice.tax_rate = Decimal(str(data["tax_rate"]))
+            except Exception:
+                return jsonify({"error": "invalid tax_rate"}), 400
+
+    if "items" in data:
+        invoice.items.clear()
+        items_data = data.get("items") or []
+        for item_data in items_data:
+            desc = (item_data.get("description") or "").strip()
+            if not desc:
+                continue
+            qty = Decimal(str(item_data.get("quantity", "0")))
+            price = Decimal(str(item_data.get("unit_price", "0")))
+            line_total = qty * price
+            product_id = item_data.get("product_id")
+            db.session.add(InvoiceItem(
+                invoice=invoice,
+                product_id=product_id,
+                description=desc,
+                quantity=qty,
+                unit_price=price,
+                line_total=line_total,
+            ))
+
+    invoice.recalc_totals()
+    db.session.commit()
+    return jsonify(invoice.to_dict())
+
+
+@app.route("/api/webhooks/payment", methods=["POST"])
+def api_webhook_payment():
+    require_api_key()
+    data = request.get_json(force=True)
+
+    invoice_number = data.get("invoice_number")
+    if not invoice_number:
+        return jsonify({"error": "invoice_number is required"}), 400
+
+    invoice = Invoice.query.filter_by(invoice_number=invoice_number).first()
+    if not invoice:
+        return jsonify({"error": "Invoice not found"}), 404
+
+    try:
+        amount = Decimal(str(data["amount"]))
+        payment_date = datetime.strptime(data["payment_date"], "%Y-%m-%d").date()
+    except Exception:
+        return jsonify({"error": "Invalid amount or payment_date"}), 400
+
+    payment = Payment(
+        invoice=invoice,
+        amount=amount,
+        payment_date=payment_date,
+        method=data.get("method"),
+        external_reference=data.get("external_reference"),
+    )
+    db.session.add(payment)
+    invoice.recalc_totals()
+    db.session.commit()
+
+    return jsonify({
+        "status": "ok",
+        "invoice": invoice.to_dict(include_items=False),
+        "payment": payment.to_dict()
+    }), 201
+
+
+# -----------------------
 # CLI helper
-# -------------------------------------------------
+# -----------------------
 
 @app.cli.command("init-db")
 def init_db_command():
     db.create_all()
 
-    if not Settings.query.get(1):
-        db.session.add(Settings(id=1, default_tax_rate=Decimal("0.00")))
-        print("Created default Settings row")
+    settings = Settings.query.get(1)
+    if not settings:
+        settings = Settings(
+            id=1,
+            default_tax_rate=Decimal("0.00"),
+            outbound_webhook_enabled=False,
+            outbound_webhook_url=None,
+            outbound_webhook_events="invoice.created,invoice.updated,payment.recorded",
+            brand_name="Invoice Manager",
+            logo_url=None,
+            payment_terms_days=0,
+            use_global_payment_terms=False,
+        )
+        db.session.add(settings)
 
     if not APIKey.query.first():
         default_key_value = generate_api_key_value()
@@ -999,7 +1350,7 @@ def init_db_command():
         print("Created default API key:", default_key_value)
 
     if not User.query.filter_by(username="admin").first():
-        admin = User(username="admin", is_admin=True)
+        admin = User(username="admin")
         admin.set_password("admin123")
         db.session.add(admin)
         print("Created default admin user: admin / admin123")
