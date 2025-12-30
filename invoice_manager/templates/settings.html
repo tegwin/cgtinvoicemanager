@@ -1,134 +1,90 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="page-header">
-  <h1 class="page-title">⚙️ Settings</h1>
-  <p class="page-subtitle">
-    Configure tax behaviour and integrations (API keys & webhooks).
-  </p>
+<div class="page-header mb-4">
+  <h2 class="mb-1">Settings</h2>
+  <p class="text-muted mb-0">Global behaviour for invoices, tax and webhooks.</p>
 </div>
 
-<div class="panel">
-  <div class="panel-header">
-    <div>
-      <div class="panel-title">Tax Settings</div>
-      <div class="panel-subtitle">
-        Default tax rate used when creating new invoices (if customers use the default).
-      </div>
+<div class="row g-4">
+  <!-- Tax & invoicing -->
+  <div class="col-lg-6">
+    <div class="card-dark p-3 p-md-4 mb-3">
+      <h5 class="mb-3">Invoicing &amp; Tax</h5>
+
+      <form method="post">
+        <div class="mb-3">
+          <label class="small-label">Default tax rate (%)</label>
+          <input type="number" step="0.01" min="0" name="default_tax_rate"
+                 class="form-control"
+                 value="{{ settings.default_tax_rate or 0 }}">
+          <div class="form-text text-muted">
+            Used when a customer is set to “use default tax”. Customers can still override this.
+          </div>
+        </div>
+
+        <!-- Future: global payment terms / due date behaviour could live here -->
+
+        <hr class="my-3" style="border-color: rgba(31,41,55,0.8);">
+
+        <div class="d-flex justify-content-end">
+          <button type="submit" class="btn btn-primary">
+            Save settings
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 
-  <form method="post">
-    <div class="mb-3">
-      <label class="form-label">Default tax rate (%)</label>
-      <input type="number" step="0.01" name="default_tax_rate" class="form-control"
-             value="{{ settings.default_tax_rate or 0 }}">
-      <div class="form-text">
-        Example: <code>20.00</code> for 20% VAT. This is applied when a customer is set to "use default tax".
-      </div>
-    </div>
+  <!-- Webhooks -->
+  <div class="col-lg-6">
+    <div class="card-dark p-3 p-md-4 mb-3">
+      <h5 class="mb-3">Outbound webhooks</h5>
 
-    <hr style="border-color: rgba(45,45,90,0.7); margin: 1.2rem 0;">
+      <form method="post">
+        <input type="hidden" name="webhook_section" value="1">
 
-    <div class="mb-3">
-      <label class="form-label">Outbound webhook</label>
-      <div class="form-check">
-        <input class="form-check-input" type="checkbox" id="outbound_webhook_enabled"
-               name="outbound_webhook_enabled"
-               {% if settings.outbound_webhook_enabled %}checked{% endif %}>
-        <label class="form-check-label" for="outbound_webhook_enabled">
-          Enable outbound webhook for invoice + payment events
-        </label>
-      </div>
-    </div>
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" role="switch"
+                 id="outbound_webhook_enabled"
+                 name="outbound_webhook_enabled"
+                 {% if settings.outbound_webhook_enabled %}checked{% endif %}>
+          <label class="form-check-label" for="outbound_webhook_enabled">
+            Enable outbound webhooks
+          </label>
+        </div>
 
-    <div class="mb-3">
-      <label class="form-label">Webhook URL</label>
-      <input type="url" name="outbound_webhook_url" class="form-control"
-             placeholder="https://example.com/webhooks/invoice"
-             value="{{ settings.outbound_webhook_url or '' }}">
-      <div class="form-text">
-        We'll send <code>application/json</code> POST requests here with fields:
-        <code>{"event": "...", "data": {...}, "sent_at": "..."}</code>.
-      </div>
-    </div>
+        <div class="mb-3">
+          <label class="small-label">Webhook URL</label>
+          <input type="url" name="outbound_webhook_url"
+                 class="form-control"
+                 placeholder="https://example.com/webhook-endpoint"
+                 value="{{ settings.outbound_webhook_url or '' }}">
+          <div class="form-text text-muted">
+            The app will POST JSON payloads here when invoices or payments change.
+          </div>
+        </div>
 
-    <button class="btn btn-primary">Save settings</button>
-  </form>
-</div>
+        <!-- NOTE: right now backend sends all events; in a later step
+             we’ll add per-event toggles that these checkboxes control. -->
 
+        <div class="mb-3">
+          <label class="small-label d-block mb-2">Events (coming soon)</label>
+          <div class="text-muted small">
+            Currently all events are sent. In a later update these checkboxes will allow
+            selecting specific events such as <code>invoice.created</code>,
+            <code>invoice.updated</code> and <code>payment.recorded</code>.
+          </div>
+        </div>
 
-  <form method="post">
-    <div class="mb-3">
-      <label class="form-label">Default tax rate (%)</label>
-      <input type="number" step="0.01" name="default_tax_rate" class="form-control"
-             value="{{ settings.default_tax_rate or 0 }}">
-      <div class="form-text">
-        Example: <code>20.00</code> for 20% VAT. This is applied when a customer is set to "use default tax".
-      </div>
-    </div>
+        <hr class="my-3" style="border-color: rgba(31,41,55,0.8);">
 
-    <button class="btn btn-primary">Save tax settings</button>
-  </form>
-</div>
-
-<div class="panel">
-  <div class="panel-header">
-    <div>
-      <div class="panel-title">API & Webhooks</div>
-      <div class="panel-subtitle">
-        Use these endpoints and keys to integrate external systems with your invoice manager.
-      </div>
-    </div>
-  </div>
-
-  <div class="mb-3">
-    <label class="form-label">Base API URL</label>
-    <div class="form-text">
-      Use this base when calling API endpoints from other systems (replace <code>&lt;endpoint&gt;</code> accordingly).
-    </div>
-    <div style="margin-top: 0.3rem; font-family: monospace; font-size: 0.9rem;">
-      <code>http://{{ request.host }}/api/&lt;endpoint&gt;</code>
-    </div>
-  </div>
-
-  <div class="mb-3">
-    <label class="form-label">Example endpoints</label>
-    <div class="form-text">
-      Create invoice:
-      <code>POST http://{{ request.host }}/api/invoices</code><br>
-      Get invoice:
-      <code>GET http://{{ request.host }}/api/invoices/&lt;id&gt;</code><br>
-      Webhook for recording payments:
-      <code>POST http://{{ request.host }}/api/webhooks/payment</code>
-    </div>
-  </div>
-
-  <div class="mb-3">
-    <label class="form-label">Webhook usage (payments)</label>
-    <div class="form-text">
-      Configure your payment provider or external system to send a POST request to:
-      <br>
-      <code>http://{{ request.host }}/api/webhooks/payment</code>
-      <br><br>
-      The body should include:
-      <code>{"invoice_number": "...", "amount": 123.45, "payment_date": "YYYY-MM-DD"}</code>
-      and the request must include your API key (see below).
-    </div>
-  </div>
-
-  <div class="mb-3">
-    <label class="form-label">API keys management</label>
-    <div class="form-text">
-      Create and manage API keys used by external systems. Full key values are only shown once at creation time.
-    </div>
-    <div style="margin-top: 0.6rem; display: flex; gap: 0.6rem; flex-wrap: wrap;">
-      <a href="{{ url_for('api_keys_list') }}" class="btn btn-secondary btn-sm">
-        🔑 Manage API Keys
-      </a>
-      <a href="{{ url_for('api_docs') }}" class="btn btn-secondary btn-sm">
-        📚 API Documentation
-      </a>
+        <div class="d-flex justify-content-end">
+          <button type="submit" class="btn btn-primary">
+            Save webhook config
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 </div>

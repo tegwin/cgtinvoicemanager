@@ -1,79 +1,110 @@
 {% extends "base.html" %}
+
 {% block content %}
-<div class="page-header">
-  <h1 class="page-title">
-    {{ 'Edit Customer' if customer else 'New Customer' }}
-  </h1>
-  <p class="page-subtitle">
-    Basic contact info plus tax behaviour for this customer.
-  </p>
+<div class="page-header mb-4 d-flex justify-content-between align-items-center">
+  <div>
+    <h2 class="mb-1">
+      {% if customer %}Edit Customer{% else %}New Customer{% endif %}
+    </h2>
+    <p class="text-muted mb-0">Contact and billing details for your customer.</p>
+  </div>
 </div>
 
-<div class="panel">
+<div class="card-dark p-3 p-md-4">
   <form method="post">
-    <div class="mb-3">
-      <label class="form-label">Name</label>
-      <input name="name" class="form-control"
-             value="{{ customer.name if customer else '' }}" required>
-    </div>
-
-    <div class="mb-3">
-      <label class="form-label">Email</label>
-      <input name="email" class="form-control"
-             value="{{ customer.email if customer else '' }}">
-    </div>
-
-    <div class="mb-3">
-      <label class="form-label">Phone</label>
-      <input name="phone" class="form-control"
-             value="{{ customer.phone if customer else '' }}">
-    </div>
-
-    <div class="mb-3">
-      <label class="form-label">Address line 1</label>
-      <input name="address_line1" class="form-control"
-             value="{{ customer.address_line1 if customer else '' }}">
-    </div>
-    <div class="mb-3">
-      <label class="form-label">Address line 2</label>
-      <input name="address_line2" class="form-control"
-             value="{{ customer.address_line2 if customer else '' }}">
-    </div>
-    <div class="mb-3">
-      <label class="form-label">City</label>
-      <input name="city" class="form-control"
-             value="{{ customer.city if customer else '' }}">
-    </div>
-    <div class="mb-3">
-      <label class="form-label">Postcode</label>
-      <input name="postcode" class="form-control"
-             value="{{ customer.postcode if customer else '' }}">
-    </div>
-    <div class="mb-3">
-      <label class="form-label">Country</label>
-      <input name="country" class="form-control"
-             value="{{ customer.country if customer else '' }}">
-    </div>
-
-    <div class="form-check">
-      <input class="form-check-input" type="checkbox" id="use_default_tax"
-             name="use_default_tax"
-             {% if not customer or customer.use_default_tax %}checked{% endif %}>
-      <label class="form-check-label" for="use_default_tax">
-        Use default tax rate from Settings
-      </label>
-    </div>
-
-    <div class="mb-3">
-      <label class="form-label">Custom tax rate (%)</label>
-      <input type="number" step="0.01" name="tax_rate" class="form-control"
-             value="{% if customer and customer.tax_rate is not none %}{{ customer.tax_rate }}{% endif %}">
-      <div class="form-text">
-        Leave blank (or tick "use default") to use the system-wide tax rate.
+    <div class="row g-3 mb-3">
+      <div class="col-md-6">
+        <label class="small-label">Name *</label>
+        <input type="text" name="name" class="form-control"
+               value="{{ customer.name if customer else '' }}" required>
+      </div>
+      <div class="col-md-6">
+        <label class="small-label">Email</label>
+        <input type="email" name="email" class="form-control"
+               value="{{ customer.email if customer else '' }}">
       </div>
     </div>
 
-    <button class="btn btn-primary">Save</button>
+    <div class="row g-3 mb-3">
+      <div class="col-md-6">
+        <label class="small-label">Phone</label>
+        <input type="text" name="phone" class="form-control"
+               value="{{ customer.phone if customer else '' }}">
+      </div>
+      <div class="col-md-6">
+        <label class="small-label">Address line 1</label>
+        <input type="text" name="address_line1" class="form-control"
+               value="{{ customer.address_line1 if customer else '' }}">
+      </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+      <div class="col-md-6">
+        <label class="small-label">Address line 2</label>
+        <input type="text" name="address_line2" class="form-control"
+               value="{{ customer.address_line2 if customer else '' }}">
+      </div>
+      <div class="col-md-3">
+        <label class="small-label">City</label>
+        <input type="text" name="city" class="form-control"
+               value="{{ customer.city if customer else '' }}">
+      </div>
+      <div class="col-md-3">
+        <label class="small-label">Postcode</label>
+        <input type="text" name="postcode" class="form-control"
+               value="{{ customer.postcode if customer else '' }}">
+      </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+      <div class="col-md-4">
+        <label class="small-label">Country</label>
+        <select name="country" class="form-select">
+          <option value="">Select country…</option>
+          {% set current_country = customer.country if customer else '' %}
+          {% for c in [
+            "United Kingdom","Ireland","United States","Canada","Australia",
+            "New Zealand","Germany","France","Spain","Italy","Netherlands",
+            "Belgium","Sweden","Norway","Denmark","Finland","Switzerland",
+            "South Africa","India","Singapore","Other"
+          ] %}
+            <option value="{{ c }}" {% if current_country == c %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-md-8">
+        <label class="small-label">Tax behaviour</label>
+        <div class="card-dark p-3" style="background:#020617;">
+          <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" id="use_default_tax"
+                   name="use_default_tax"
+                   {% if not customer or customer.use_default_tax %}checked{% endif %}>
+            <label class="form-check-label" for="use_default_tax">
+              Use default tax rate from Settings
+            </label>
+          </div>
+          <div class="mt-2">
+            <label class="small-label">Custom tax rate (%)</label>
+            <input type="number" step="0.01" min="0" name="tax_rate"
+                   class="form-control"
+                   value="{{ customer.tax_rate if customer and customer.tax_rate is not none else '' }}">
+            <div class="form-text text-muted">
+              Leave blank (or tick the box above) to use the global default.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="d-flex justify-content-between">
+      <a href="{{ url_for('list_customers') }}" class="btn btn-outline-light">
+        Cancel
+      </a>
+      <button type="submit" class="btn btn-primary">
+        Save customer
+      </button>
+    </div>
   </form>
 </div>
 {% endblock %}

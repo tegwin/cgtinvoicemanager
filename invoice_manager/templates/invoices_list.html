@@ -12,8 +12,30 @@
 </div>
 
 <div class="card-dark p-3 p-md-4">
+  <!-- Filter pills -->
+  <div class="mb-3 d-flex flex-wrap gap-2">
+    <button type="button" class="nav-pill active" data-filter="open">
+      Open (hide paid)
+    </button>
+    <button type="button" class="nav-pill" data-filter="all">
+      All
+    </button>
+    <button type="button" class="nav-pill" data-filter="draft">
+      Draft
+    </button>
+    <button type="button" class="nav-pill" data-filter="sent">
+      Sent
+    </button>
+    <button type="button" class="nav-pill" data-filter="overdue">
+      Overdue
+    </button>
+    <button type="button" class="nav-pill" data-filter="paid">
+      Paid
+    </button>
+  </div>
+
   <div class="table-responsive">
-    <table class="table table-dark align-middle mb-0">
+    <table class="table table-dark align-middle mb-0" id="invoice-table">
       <thead>
         <tr>
           <th>#</th>
@@ -30,11 +52,11 @@
       </thead>
       <tbody>
       {% for invoice in invoices %}
-        <tr>
+        <tr data-status="{{ invoice.status }}">
           <td class="font-mono">{{ invoice.invoice_number }}</td>
           <td>{{ invoice.customer.name if invoice.customer else '-' }}</td>
           <td>{{ invoice.issue_date }}</td>
-          <td>{{ invoice.due_date }}</td>
+          <td>{{ invoice.due_date or '-' }}</td>
           <td class="text-end">{{ '%.2f'|format(invoice.subtotal_amount) }}</td>
           <td class="text-end">{{ '%.2f'|format(invoice.tax_amount) }}</td>
           <td class="text-end">{{ '%.2f'|format(invoice.total_amount) }}</td>
@@ -73,4 +95,42 @@
     </table>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  const pills = document.querySelectorAll('[data-filter]');
+  const rows = document.querySelectorAll('#invoice-table tbody tr');
+
+  function applyFilter(mode) {
+    rows.forEach(row => {
+      const status = (row.getAttribute('data-status') || '').toLowerCase();
+      let show = true;
+
+      if (mode === 'open') {
+        // hide paid + cancelled by default
+        show = !(status === 'paid' || status === 'cancelled');
+      } else if (mode === 'all') {
+        show = true;
+      } else {
+        show = (status === mode);
+      }
+
+      row.style.display = show ? '' : 'none';
+    });
+  }
+
+  pills.forEach(btn => {
+    btn.addEventListener('click', () => {
+      pills.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      applyFilter(btn.getAttribute('data-filter'));
+    });
+  });
+
+  // default = "open" (hide paid)
+  applyFilter('open');
+})();
+</script>
 {% endblock %}
