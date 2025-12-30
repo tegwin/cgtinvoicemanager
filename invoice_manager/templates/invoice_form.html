@@ -66,8 +66,8 @@
           </div>
         </div>
 
-        <!-- effective tax rate used for live totals -->
-        <input type="hidden" id="tax-rate-input"
+        <input type="hidden"
+               id="tax-rate-input"
                value="{{ (invoice.tax_rate if invoice and invoice.tax_rate is not none else settings.default_tax_rate) or 0 }}">
 
         <div class="mb-2 d-flex justify-content-between align-items-center">
@@ -90,18 +90,17 @@
               </tr>
             </thead>
             <tbody>
-            {# EDIT EXISTING INVOICE: keep rows & try to re-select product #}
             {% if invoice and invoice.items %}
               {% for item in invoice.items %}
                 <tr class="item-row">
                   <td>
-                    <select class="form-select product-select">
+                    <select class="form-select product-select" name="item_product_id">
                       <option value="">Manual...</option>
                       {% for p in products %}
                         <option value="{{ p.id }}"
-                                data-description="{{ p.name|e }}"
+                                data-description="{{ (p.description or '')|e }}"
                                 data-price="{{ p.unit_price }}"
-                                {% if item.description == p.name %}selected{% endif %}>
+                                {% if item.product_id == p.id %}selected{% endif %}>
                           {{ p.name }}
                         </option>
                       {% endfor %}
@@ -132,22 +131,22 @@
                   <td class="text-end">
                     <span class="line-total">{{ item.line_total }}</span>
                   </td>
-                  <td>
-                    <button type="button" class="btn btn-sm btn-outline-danger remove-line-btn">
-                      <i class="fa-solid fa-xmark"></i>
+                  <td class="text-center">
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-line-btn"
+                            title="Remove line">
+                      &times;
                     </button>
                   </td>
                 </tr>
               {% endfor %}
-            {# NEW INVOICE: one blank row #}
             {% else %}
               <tr class="item-row">
                 <td>
-                  <select class="form-select product-select">
+                  <select class="form-select product-select" name="item_product_id">
                     <option value="">Manual...</option>
                     {% for p in products %}
                       <option value="{{ p.id }}"
-                              data-description="{{ p.name|e }}"
+                              data-description="{{ (p.description or '')|e }}"
                               data-price="{{ p.unit_price }}">
                         {{ p.name }}
                       </option>
@@ -176,9 +175,10 @@
                 <td class="text-end">
                   <span class="line-total">0.00</span>
                 </td>
-                <td>
-                  <button type="button" class="btn btn-sm btn-outline-danger remove-line-btn">
-                    <i class="fa-solid fa-xmark"></i>
+                <td class="text-center">
+                  <button type="button" class="btn btn-sm btn-outline-danger remove-line-btn"
+                          title="Remove line">
+                    &times;
                   </button>
                 </td>
               </tr>
@@ -208,9 +208,7 @@
       </div>
       <div class="d-flex justify-content-between mb-2">
         <span class="text-muted">
-          VAT (<span id="summary-tax-rate">
-            {{ (invoice.tax_rate if invoice and invoice.tax_rate is not none else settings.default_tax_rate) or 0 }}
-          </span>%)
+          VAT (<span id="summary-tax-rate">{{ (invoice.tax_rate if invoice and invoice.tax_rate is not none else settings.default_tax_rate) or 0 }}</span>%)
         </span>
         <span id="summary-tax">0.00</span>
       </div>
@@ -220,7 +218,7 @@
         <span class="fw-bold fs-5" id="summary-total">0.00</span>
       </div>
       <div class="text-muted small">
-        Totals are based on current customer tax settings and line items.
+        Totals are indicative based on the current customer tax settings and line items.
       </div>
     </div>
   </div>
@@ -256,7 +254,6 @@
     document.getElementById("summary-subtotal").textContent = subtotal.toFixed(2);
     document.getElementById("summary-tax").textContent = tax.toFixed(2);
     document.getElementById("summary-total").textContent = total.toFixed(2);
-
     if (taxRateSpan) {
       taxRateSpan.textContent = taxRate.toFixed(2).replace(/\.00$/, '');
     }
@@ -291,9 +288,7 @@
         const desc = selected.getAttribute("data-description") || "";
         const price = selected.getAttribute("data-price") || "";
 
-        // IMPORTANT: store the product NAME in description
-        // so we can re-select the product on edit.
-        if (desc) {
+        if (desc && descInput.value.trim() === "") {
           descInput.value = desc;
         }
         if (price) {
@@ -304,21 +299,19 @@
     }
   }
 
-  // Bind events for existing rows
   document.querySelectorAll("#items-table tbody tr.item-row").forEach(bindRowEvents);
 
-  // Add-row button
   document.getElementById("add-line-btn").addEventListener("click", () => {
     const tbody = document.querySelector("#items-table tbody");
     const row = document.createElement("tr");
     row.classList.add("item-row");
     row.innerHTML = `
       <td>
-        <select class="form-select product-select">
+        <select class="form-select product-select" name="item_product_id">
           <option value="">Manual...</option>
           {% for p in products %}
           <option value="{{ p.id }}"
-                  data-description="{{ p.name|e }}"
+                  data-description="{{ (p.description or '')|e }}"
                   data-price="{{ p.unit_price }}">
             {{ p.name }}
           </option>
@@ -339,9 +332,10 @@
       <td class="text-end">
         <span class="line-total">0.00</span>
       </td>
-      <td>
-        <button type="button" class="btn btn-sm btn-outline-danger remove-line-btn">
-          <i class="fa-solid fa-xmark"></i>
+      <td class="text-center">
+        <button type="button" class="btn btn-sm btn-outline-danger remove-line-btn"
+                title="Remove line">
+          &times;
         </button>
       </td>
     `;
@@ -350,7 +344,6 @@
     recalcTotals();
   });
 
-  // Update tax rate when customer changes
   const customerSelect = document.getElementById("customer-select");
   const taxRateInput = document.getElementById("tax-rate-input");
   if (customerSelect && taxRateInput) {
@@ -362,7 +355,6 @@
     });
   }
 
-  // Initial totals
   recalcTotals();
 })();
 </script>
