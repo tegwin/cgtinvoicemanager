@@ -5,383 +5,443 @@
   <title>Invoice Manager</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- Bootstrap & Font Awesome -->
-  <link rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
-  <link rel="stylesheet"
-        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"/>
+  <!-- Bootstrap -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  >
+  <!-- Font Awesome for icons -->
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+    integrity="sha512-S+8xQAPYVh4U7Jm7d7tFfscTnZ7P3dEr0kddQm+0ZzF4R9fQnJg9k0pR4zYc4r+LZtU0YH4q0Fqz4v1n8a4KQ=="
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  />
 
   <style>
     :root {
-      --bg-main: #020617;
-      --bg-card: #111428;
-      --accent-orange: #f97316;
-      --accent-purple: #a855f7;
-      --accent-blue: #2563eb;
-      --accent-green: #16a34a;
-      --text-main: #e5e7eb;
+      --bg-body: #050816;
+      --bg-sidebar: #050816;
+      --bg-card: #050816;
+      --bg-card-soft: #050816;
+      --border-subtle: #1f2937;
+      --accent: #f97316;
+      --accent-soft: rgba(249, 115, 22, 0.12);
+      --accent-strong: #fb923c;
+      --text-main: #f9fafb;
       --text-muted: #9ca3af;
+      --pill-green: #22c55e;
+      --pill-red: #ef4444;
+      --pill-blue: #3b82f6;
+      --input-bg: #050816;
+      --input-border: #1f2937;
+    }
+
+    html, body {
+      height: 100%;
+      background: radial-gradient(circle at top, #111827 0, #020617 45%, #000 100%);
+      color: var(--text-main);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
     body {
-      background: radial-gradient(circle at top, #0b1120 0, #020617 55%);
-      color: var(--text-main);
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      display: flex;
+    }
+
+    .layout-root {
+      display: flex;
+      width: 100%;
       min-height: 100vh;
     }
 
-    a {
-      color: var(--accent-orange);
-      text-decoration: none;
-    }
-    a:hover {
-      color: #fdba74;
-      text-decoration: none;
-    }
-
-    /* Dark form controls ------------------------------------------------ */
-    .form-control,
-    .form-select {
-      background-color: #050716;
-      border-color: rgba(148,163,184,0.45);
-      color: var(--text-main);
-      font-size: 0.9rem;
-    }
-    .form-control::placeholder {
-      color: rgba(148,163,184,0.85);
-      opacity: 1;
-    }
-    .form-control:focus,
-    .form-select:focus {
-      background-color: #020617;
-      border-color: rgba(59,130,246,0.9);
-      color: var(--text-main);
-      box-shadow: 0 0 0 1px rgba(59,130,246,0.45);
+    .sidebar {
+      width: 230px;
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border-subtle);
+      padding: 1rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
     }
 
-    /* Top nav ----------------------------------------------------------- */
-    .app-navbar {
-      background: rgba(15,23,42,0.98);
-      border-bottom: 1px solid rgba(15,23,42,1);
-      backdrop-filter: blur(18px);
+    .sidebar-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-weight: 700;
+      font-size: 1.1rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
     }
 
     .brand-dot {
       width: 28px;
       height: 28px;
       border-radius: 999px;
-      background: radial-gradient(circle at 30% 20%, #f97316, #db2777);
-      box-shadow: 0 0 0 3px rgba(248,250,252,0.04);
+      background: radial-gradient(circle at 30% 30%, #fb923c, #e11d48);
+      box-shadow: 0 0 20px rgba(248, 113, 113, 0.35);
     }
 
-    .brand-text-main {
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      color: #e5e7eb;
+    .brand-title-main {
+      color: #fbbf24;
     }
-    .brand-text-sub {
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      font-size: 0.78rem;
-      text-transform: uppercase;
+    .brand-title-sub {
       color: #f97316;
+      margin-left: 4px;
     }
 
-    .nav-pill {
-      padding: 0.35rem 0.9rem;
+    .sidebar-nav {
+      list-style: none;
+      padding-left: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .sidebar-nav a {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0.75rem;
       border-radius: 999px;
-      font-size: 0.82rem;
-      font-weight: 500;
       color: var(--text-muted);
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      background: transparent;
-      border: 1px solid transparent;
-    }
-    .nav-pill:hover {
-      background: rgba(30,64,175,0.45);
-      color: #f9fafb;
-    }
-    .nav-pill.active {
-      background: #111827;
-      border-color: rgba(59,130,246,0.6);
-      color: #f9fafb;
-      box-shadow: 0 8px 18px rgba(15,23,42,0.85);
+      text-decoration: none;
+      font-size: 0.92rem;
     }
 
-    .nav-pill-cta {
-      background: #1e293b;
-      border-radius: 999px;
-      padding: 0.45rem 1rem;
-      font-size: 0.82rem;
-      color: #e5e7eb;
-      border: 1px solid rgba(148,163,184,0.4);
-    }
-    .nav-pill-cta:hover {
-      background: #0f172a;
-      color: #f9fafb;
+    .sidebar-nav a .nav-icon {
+      width: 18px;
+      text-align: center;
     }
 
-    .nav-user-pill {
-      background: linear-gradient(135deg, #f97316, #e11d48);
-      color: #f9fafb;
-      font-size: 0.8rem;
-      padding: 0.4rem 0.9rem;
-      border-radius: 999px;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4rem;
-      box-shadow: 0 12px 28px rgba(248,113,113,0.35);
-    }
-
-    .nav-logout-pill {
-      background: #111827;
-      border-radius: 999px;
-      font-size: 0.8rem;
-      padding: 0.4rem 0.95rem;
-      border: 1px solid rgba(148,163,184,0.55);
-      color: #e5e7eb;
-    }
-    .nav-logout-pill:hover {
-      background: #0b1120;
-      color: #f9fafb;
-    }
-
-    /* Layout ------------------------------------------------------------ */
-    .app-shell {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 1.25rem 1.5rem 2.5rem;
-    }
-
-    .card-dark {
-      background: var(--bg-card);
-      border-radius: 1rem;
-      border: 1px solid rgba(15,23,42,0.9);
-      box-shadow:
-        0 18px 40px rgba(15,23,42,0.8),
-        0 0 0 1px rgba(148,163,184,0.1);
-    }
-
-    .page-header h2 {
-      font-weight: 700;
-    }
-
-    /* Tables ------------------------------------------------------------ */
-    .table-dark {
-      --bs-table-bg: transparent;
-      --bs-table-striped-bg: rgba(15,23,42,0.8);
-      --bs-table-border-color: rgba(31,41,55,0.9);
+    .sidebar-nav a:hover {
+      background: rgba(148, 163, 184, 0.12);
       color: var(--text-main);
     }
 
-    .table-dark thead th {
-      border-bottom-width: 1px;
-      border-color: rgba(55,65,81,0.9);
-      font-size: 0.78rem;
-      letter-spacing: 0.08em;
+    .sidebar-nav a.active {
+      background: rgba(37, 99, 235, 0.22);
+      color: #e5e7eb;
+      box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.5);
+    }
+
+    .sidebar-section-title {
+      font-size: 0.75rem;
       text-transform: uppercase;
-      color: var(--text-muted);
-      background: radial-gradient(circle at top, #020617 0, #020617 80%);
+      letter-spacing: 0.16em;
+      color: #6b7280;
+      margin: 1rem 0 0.25rem;
     }
 
-    .table-dark tbody tr {
-      border-color: rgba(31,41,55,0.95);
+    .sidebar-footer {
+      margin-top: auto;
+      font-size: 0.8rem;
+      color: #4b5563;
     }
 
-    .table-dark tbody tr:hover {
-      background: rgba(15,23,42,0.85);
+    .main-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
     }
 
-    .table-dark td {
-      vertical-align: middle;
-      font-size: 0.88rem;
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 1.5rem;
+      border-bottom: 1px solid var(--border-subtle);
+      backdrop-filter: blur(12px);
+      background: linear-gradient(to right, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.6));
     }
 
-    /* Pills / badges ---------------------------------------------------- */
-    .badge-pill {
+    .topbar-title {
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: #6b7280;
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .user-pill {
       display: inline-flex;
       align-items: center;
-      padding: 0.15rem 0.6rem;
+      gap: 0.5rem;
+      padding: 0.25rem 0.85rem;
       border-radius: 999px;
-      font-size: 0.75rem;
-      font-weight: 500;
-    }
-
-    .badge-pill-blue {
-      background: #2563eb;
-      color: #f9fafb;
-    }
-    .badge-pill-green {
-      background: #16a34a;
-      color: #f9fafb;
-    }
-    .badge-pill-green-soft {
-      background: rgba(22,163,74,0.14);
-      color: #bbf7d0;
-    }
-    .badge-pill-grey-soft {
-      background: rgba(148,163,184,0.18);
+      background: radial-gradient(circle at top, rgba(59, 130, 246, 0.35), rgba(15, 23, 42, 0.9));
+      border: 1px solid rgba(37, 99, 235, 0.7);
       color: #e5e7eb;
-    }
-    .badge-pill-red-soft {
-      background: rgba(248,113,113,0.18);
-      color: #fecaca;
-    }
-    .badge-pill-amber-soft {
-      background: rgba(245,158,11,0.18);
-      color: #fed7aa;
+      font-size: 0.85rem;
     }
 
-    .status-pill {
-      padding: 0.15rem 0.7rem;
+    .user-avatar {
+      width: 22px;
+      height: 22px;
       border-radius: 999px;
-      font-size: 0.75rem;
-      font-weight: 500;
+      background: radial-gradient(circle at 30% 30%, #f97316, #ec4899);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 600;
     }
-    .status-pill-draft    { background: rgba(148,163,184,0.22); color:#e5e7eb; }
-    .status-pill-sent     { background: rgba(59,130,246,0.22); color:#bfdbfe; }
-    .status-pill-paid     { background: rgba(22,163,74,0.22); color:#bbf7d0; }
-    .status-pill-overdue  { background: rgba(239,68,68,0.22); color:#fecaca; }
-    .status-pill-cancelled{ background: rgba(107,114,128,0.26); color:#d1d5db; }
+
+    .btn-ghost {
+      border-radius: 999px;
+      padding: 0.3rem 0.9rem;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: rgba(15, 23, 42, 0.7);
+      color: #e5e7eb;
+      font-size: 0.85rem;
+    }
+
+    .btn-ghost:hover {
+      background: rgba(30, 64, 175, 0.85);
+      color: #f9fafb;
+      border-color: rgba(59, 130, 246, 0.7);
+    }
+
+    .main-content {
+      padding: 1.5rem 1.75rem 2rem;
+      min-height: 0;
+    }
+
+    .card-dark {
+      border-radius: 18px;
+      border: 1px solid var(--border-subtle);
+      background: radial-gradient(circle at top left, rgba(30,64,175,0.20), rgba(15,23,42,0.95));
+      box-shadow: 0 22px 40px rgba(15, 23, 42, 0.88);
+    }
+
+    .page-header h2 {
+      font-weight: 600;
+    }
+
+    .small-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--text-muted);
+    }
 
     .font-mono {
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     }
 
-    .text-muted {
-      color: var(--text-muted) !important;
+    /* Form controls – dark, not white */
+    .form-control,
+    .form-select,
+    textarea.form-control {
+      background-color: var(--input-bg);
+      border: 1px solid var(--input-border);
+      color: var(--text-main);
+      border-radius: 12px;
+      font-size: 0.95rem;
     }
 
-    .small-label {
-      font-size: 0.78rem;
+    .form-control:focus,
+    .form-select:focus,
+    textarea.form-control:focus {
+      background-color: var(--input-bg);
+      border-color: rgba(59, 130, 246, 0.8);
+      box-shadow: 0 0 0 1px rgba(59,130,246,0.6);
+      color: var(--text-main);
+    }
+
+    .form-control::placeholder {
+      color: #6b7280;
+    }
+
+    /* Status pills */
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.15rem 0.7rem;
+      font-size: 0.75rem;
+      border-radius: 999px;
+      font-weight: 500;
+    }
+    .status-pill-active {
+      background: rgba(34, 197, 94, 0.15);
+      color: #bbf7d0;
+      border: 1px solid rgba(34, 197, 94, 0.6);
+    }
+    .status-pill-inactive {
+      background: rgba(148, 163, 184, 0.12);
+      color: #9ca3af;
+      border: 1px solid rgba(75, 85, 99, 0.7);
+    }
+
+    .badge-perm {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.1rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 500;
+    }
+    .badge-perm-read {
+      background: rgba(59,130,246,0.15);
+      color: #bfdbfe;
+    }
+    .badge-perm-write {
+      background: rgba(34,197,94,0.2);
+      color: #bbf7d0;
+    }
+
+    .table-dark {
+      --bs-table-bg: rgba(15, 23, 42, 0.9);
+      --bs-table-striped-bg: rgba(15, 23, 42, 0.95);
+      --bs-table-hover-bg: rgba(30, 64, 175, 0.28);
+      border-color: rgba(31, 41, 55, 0.9);
+      font-size: 0.9rem;
+    }
+
+    .table-dark th {
+      font-size: 0.75rem;
       text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-muted);
-      margin-bottom: 0.2rem;
+      letter-spacing: 0.16em;
+      color: #9ca3af;
+      border-bottom-color: rgba(31, 41, 55, 1);
     }
 
     .alert {
-      border-radius: 0.75rem;
-      border: 1px solid rgba(15,23,42,1);
+      border-radius: 12px;
     }
 
-    .btn-primary {
-      background: linear-gradient(135deg, #f97316, #e11d48);
-      border: none;
-      box-shadow: 0 14px 30px rgba(248,113,113,0.4);
-      font-weight: 600;
-    }
-    .btn-primary:hover {
-      background: linear-gradient(135deg, #fb923c, #fb7185);
+    /* Small utility gap class for plain divs */
+    .gap-2 > * + * {
+      margin-left: 0.5rem;
     }
 
-    .btn-outline-light {
-      border-color: rgba(148,163,184,0.75);
-      color: #e5e7eb;
-    }
-    .btn-outline-light:hover {
-      background: #1e293b;
-      color: #f9fafb;
+    @media (max-width: 992px) {
+      .sidebar {
+        display: none;
+      }
+      .main-content {
+        padding: 1rem;
+      }
     }
   </style>
+
+  {% block extra_head %}{% endblock %}
 </head>
 <body>
+<div class="layout-root">
 
-{% if current_user %}
-<nav class="navbar navbar-expand-lg app-navbar">
-  <div class="container-fluid px-4">
-    <div class="d-flex align-items-center gap-3">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
       <div class="brand-dot"></div>
-      <div class="d-flex flex-column">
-        <span class="brand-text-sub">Invoice</span>
-        <span class="brand-text-main">Manager</span>
+      <div>
+        <div class="brand-title-main">INVOICE</div>
+        <div class="brand-title-sub">Manager</div>
       </div>
     </div>
 
-    <button class="navbar-toggler text-light" type="button" data-bs-toggle="collapse"
-            data-bs-target="#mainNav" aria-controls="mainNav" aria-expanded="false"
-            aria-label="Toggle navigation">
-      <span class="navbar-toggler-icon"></span>
-    </button>
+    <ul class="sidebar-nav mt-2">
+      <li>
+        <a href="{{ url_for('list_invoices') }}"
+           class="{% if request.endpoint == 'list_invoices' %}active{% endif %}">
+          <span class="nav-icon"><i class="fa-regular fa-file-lines"></i></span>
+          <span>Invoices</span>
+        </a>
+      </li>
+      <li>
+        <a href="{{ url_for('list_customers') }}"
+           class="{% if request.endpoint in ['list_customers','new_customer','edit_customer'] %}active{% endif %}">
+          <span class="nav-icon"><i class="fa-regular fa-user"></i></span>
+          <span>Customers</span>
+        </a>
+      </li>
+      <li>
+        <a href="{{ url_for('products_list') }}"
+           class="{% if request.endpoint in ['products_list','product_new','product_edit'] %}active{% endif %}">
+          <span class="nav-icon"><i class="fa-solid fa-box"></i></span>
+          <span>Products</span>
+        </a>
+      </li>
 
-    <div class="collapse navbar-collapse justify-content-center" id="mainNav">
-      <ul class="navbar-nav gap-1">
-        <li class="nav-item">
-          <a class="nav-pill {% if request.endpoint and request.endpoint.startswith('list_invoices') %}active{% endif %}"
-             href="{{ url_for('list_invoices') }}">
-            <i class="fa-regular fa-file-lines"></i> Invoices
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-pill {% if request.endpoint and request.endpoint.startswith('list_customers') %}active{% endif %}"
-             href="{{ url_for('list_customers') }}">
-            <i class="fa-regular fa-user"></i> Customers
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-pill {% if request.endpoint and request.endpoint.startswith('list_products') %}active{% endif %}"
-             href="{{ url_for('list_products') }}">
-            <i class="fa-solid fa-box"></i> Products
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-pill {% if request.endpoint == 'import_customers' %}active{% endif %}"
-             href="{{ url_for('import_customers') }}">
-            <i class="fa-solid fa-file-import"></i> Import Customers
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-pill {% if request.endpoint == 'import_invoices' %}active{% endif %}"
-             href="{{ url_for('import_invoices') }}">
-            <i class="fa-solid fa-file-arrow-up"></i> Import Invoices
-          </a>
-        </li>
-        <!-- API Docs first, then API Keys as requested -->
-        <li class="nav-item">
-          <a class="nav-pill {% if request.endpoint == 'api_docs' %}active{% endif %}"
-             href="{{ url_for('api_docs') }}">
-            <i class="fa-solid fa-book"></i> API Docs
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-pill {% if request.endpoint and request.endpoint.startswith('api_keys_') %}active{% endif %}"
-             href="{{ url_for('api_keys_list') }}">
-            <i class="fa-solid fa-key"></i> API Keys
-          </a>
-        </li>
-      </ul>
+      <div class="sidebar-section-title">Imports</div>
+      <li>
+        <a href="{{ url_for('import_customers') }}"
+           class="{% if request.endpoint == 'import_customers' %}active{% endif %}">
+          <span class="nav-icon"><i class="fa-solid fa-file-arrow-up"></i></span>
+          <span>Import Customers</span>
+        </a>
+      </li>
+      <li>
+        <a href="{{ url_for('import_invoices') }}"
+           class="{% if request.endpoint == 'import_invoices' %}active{% endif %}">
+          <span class="nav-icon"><i class="fa-solid fa-file-arrow-up"></i></span>
+          <span>Import Invoices</span>
+        </a>
+      </li>
+
+      <div class="sidebar-section-title">Admin</div>
+      <li>
+        <a href="{{ url_for('settings_view') }}"
+           class="{% if request.endpoint in ['settings_view','api_keys_list','api_keys_new','api_docs'] %}active{% endif %}">
+          <span class="nav-icon"><i class="fa-solid fa-gear"></i></span>
+          <span>Settings</span>
+        </a>
+      </li>
+      <li>
+        <a href="{{ url_for('logout') }}">
+          <span class="nav-icon"><i class="fa-solid fa-arrow-right-from-bracket"></i></span>
+          <span>Logout</span>
+        </a>
+      </li>
+    </ul>
+
+    <div class="sidebar-footer mt-3">
+      <div>Invoice Manager</div>
+      <div class="text-muted">Self-hosted</div>
     </div>
+  </aside>
 
-    <div class="d-flex align-items-center gap-2">
-      <a href="{{ url_for('settings_view') }}" class="nav-pill-cta">
-        <i class="fa-solid fa-gear me-1"></i> Settings
-      </a>
-      <div class="nav-user-pill">
-        <i class="fa-regular fa-user"></i>
-        <span>{{ current_user.username }}</span>
+  <!-- Main area -->
+  <div class="main-area">
+    <header class="topbar">
+      <div class="topbar-title">
+        {% block page_tagline %}Control center for your invoices{% endblock %}
       </div>
-      <a href="{{ url_for('logout') }}" class="nav-logout-pill">
-        Logout
-      </a>
-    </div>
+      <div class="topbar-right">
+        <div class="user-pill">
+          <div class="user-avatar">
+            {{ (session.get('username', 'admin')[:1] or 'A')|upper }}
+          </div>
+          <div>{{ session.get('username', 'admin') }}</div>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-content">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="mb-3">
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      {% block content %}{% endblock %}
+    </main>
   </div>
-</nav>
-{% endif %}
-
-<div class="app-shell">
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      <div class="mb-3">
-        {% for category, message in messages %}
-          <div class="alert alert-{{ category }} mb-2">{{ message }}</div>
-        {% endfor %}
-      </div>
-    {% endif %}
-  {% endwith %}
-
-  {% block content %}{% endblock %}
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
