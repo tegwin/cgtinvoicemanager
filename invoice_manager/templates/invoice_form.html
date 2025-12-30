@@ -93,15 +93,18 @@
             <tbody>
             {% if invoice and invoice.items %}
               {% for item in invoice.items %}
+                {% set item_desc = item.description or '' %}
                 <tr class="item-row">
                   <td>
                     <select class="form-select product-select">
                       <option value="">Manual...</option>
                       {% for p in products %}
+                        {% set prod_desc = p.description or '' %}
+                        {% set prod_name = p.name or '' %}
                         <option value="{{ p.id }}"
-                                data-description="{{ (p.description or '')|e }}"
+                                data-description="{{ (p.description or p.name or '')|e }}"
                                 data-price="{{ p.unit_price }}"
-                                {% if item.description == p.name and item.unit_price == p.unit_price %}selected{% endif %}>
+                                {% if (item_desc == prod_desc or item_desc == prod_name) and item.unit_price == p.unit_price %}selected{% endif %}>
                           {{ p.name }}
                         </option>
                       {% endfor %}
@@ -146,7 +149,7 @@
                     <option value="">Manual...</option>
                     {% for p in products %}
                       <option value="{{ p.id }}"
-                              data-description="{{ (p.description or '')|e }}"
+                              data-description="{{ (p.description or p.name or '')|e }}"
                               data-price="{{ p.unit_price }}">
                         {{ p.name }}
                       </option>
@@ -313,7 +316,7 @@
           <option value="">Manual...</option>
           {% for p in products %}
           <option value="{{ p.id }}"
-                  data-description="{{ (p.description or '')|e }}"
+                  data-description="{{ (p.description or p.name or '')|e }}"
                   data-price="{{ p.unit_price }}">
             {{ p.name }}
           </option>
