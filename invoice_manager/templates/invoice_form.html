@@ -1,20 +1,20 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="page-header mb-4">
+<div class="d-flex justify-content-between align-items-center mb-3">
   <div>
-    <h1 class="page-title">
+    <h2 class="mb-0">
       {% if invoice %}Edit Invoice{% else %}New Invoice{% endif %}
-    </h1>
-    <p class="page-subtitle text-muted">
+    </h2>
+    <div class="text-muted-soft small">
       Choose a customer, add product lines, and review totals in real time.
-    </p>
+    </div>
   </div>
 </div>
 
 <div class="row g-4">
   <div class="col-lg-8">
-    <div class="card card-dark p-3 p-md-4 mb-3">
+    <div class="card-dark p-3 p-md-4 mb-3">
       <form method="post" id="invoice-form">
         <div class="row g-3 mb-3">
           <div class="col-md-6">
@@ -33,14 +33,17 @@
           </div>
           <div class="col-md-3">
             <label class="form-label">Issue date</label>
-            <input type="date" name="issue_date" class="form-control"
-                   value="{% if invoice and invoice.issue_date %}{{ invoice.issue_date.strftime('%Y-%m-%d') }}{% endif %}"
-                   required>
+            <input type="date"
+                   name="issue_date"
+                   class="form-control"
+                   value="{{ (invoice.issue_date if invoice else '') }}">
           </div>
           <div class="col-md-3">
             <label class="form-label">Due date</label>
-            <input type="date" name="due_date" class="form-control"
-                   value="{% if invoice and invoice.due_date %}{{ invoice.due_date.strftime('%Y-%m-%d') }}{% endif %}">
+            <input type="date"
+                   name="due_date"
+                   class="form-control"
+                   value="{{ (invoice.due_date if invoice else '') }}">
           </div>
         </div>
 
@@ -68,7 +71,7 @@
         <div class="mb-2 d-flex justify-content-between align-items-center">
           <h5 class="mb-0">Line items</h5>
           <button type="button" class="btn btn-sm btn-outline-light" id="add-line-btn">
-            + Add line
+            <i class="fa-solid fa-plus me-1"></i> Add line
           </button>
         </div>
 
@@ -89,11 +92,11 @@
               {% for item in invoice.items %}
                 <tr class="item-row">
                   <td>
-                    <select class="form-select product-select" name="item_product_id">
+                    <select class="form-select product-select">
                       <option value="">Manual...</option>
                       {% for p in products %}
                         <option value="{{ p.id }}"
-                                data-description="{{ (p.description or '')|e }}"
+                                data-description="{{ p.description|e }}"
                                 data-price="{{ p.unit_price }}"
                                 {% if item.product_id == p.id %}selected{% endif %}>
                           {{ p.name }}
@@ -116,11 +119,11 @@
                            value="{{ item.unit_price }}">
                   </td>
                   <td class="text-end">
-                    <span class="line-total">{{ item.line_total }}</span>
+                    <span class="line-total">{{ "%.2f"|format(item.line_total or 0) }}</span>
                   </td>
                   <td>
                     <button type="button" class="btn btn-sm btn-outline-danger remove-line-btn">
-                      ×
+                      <i class="fa-solid fa-xmark"></i>
                     </button>
                   </td>
                 </tr>
@@ -128,11 +131,11 @@
             {% else %}
               <tr class="item-row">
                 <td>
-                  <select class="form-select product-select" name="item_product_id">
+                  <select class="form-select product-select">
                     <option value="">Manual...</option>
                     {% for p in products %}
                       <option value="{{ p.id }}"
-                              data-description="{{ (p.description or '')|e }}"
+                              data-description="{{ p.description|e }}"
                               data-price="{{ p.unit_price }}">
                         {{ p.name }}
                       </option>
@@ -155,7 +158,7 @@
                 </td>
                 <td>
                   <button type="button" class="btn btn-sm btn-outline-danger remove-line-btn">
-                    ×
+                    <i class="fa-solid fa-xmark"></i>
                   </button>
                 </td>
               </tr>
@@ -177,24 +180,24 @@
   </div>
 
   <div class="col-lg-4">
-    <div class="card card-dark p-3 p-md-4">
+    <div class="card-dark p-3 p-md-4">
       <h5 class="mb-3">Totals</h5>
       <div class="d-flex justify-content-between mb-2">
-        <span class="text-muted">Subtotal</span>
+        <span class="text-muted-soft">Subtotal</span>
         <span id="summary-subtotal">0.00</span>
       </div>
       <div class="d-flex justify-content-between mb-2">
-        <span class="text-muted">
+        <span class="text-muted-soft">
           VAT (<span id="summary-tax-rate">{{ (invoice.tax_rate if invoice and invoice.tax_rate is not none else settings.default_tax_rate) or 0 }}</span>%)
         </span>
         <span id="summary-tax">0.00</span>
       </div>
-      <hr class="my-2" style="border-color: rgba(255,255,255,0.1);">
+      <hr class="my-2" style="border-color: rgba(255,255,255,0.08);">
       <div class="d-flex justify-content-between align-items-center mb-1">
         <span class="fw-semibold">Total</span>
         <span class="fw-bold fs-5" id="summary-total">0.00</span>
       </div>
-      <div class="text-muted small">
+      <div class="text-muted-soft small">
         Totals are indicative based on the current customer tax settings and line items.
       </div>
     </div>
@@ -284,11 +287,11 @@
     row.classList.add("item-row");
     row.innerHTML = `
       <td>
-        <select class="form-select product-select" name="item_product_id">
+        <select class="form-select product-select">
           <option value="">Manual...</option>
           {% for p in products %}
           <option value="{{ p.id }}"
-                  data-description="{{ (p.description or '')|e }}"
+                  data-description="{{ p.description|e }}"
                   data-price="{{ p.unit_price }}">
             {{ p.name }}
           </option>
@@ -311,7 +314,7 @@
       </td>
       <td>
         <button type="button" class="btn btn-sm btn-outline-danger remove-line-btn">
-          ×
+          <i class="fa-solid fa-xmark"></i>
         </button>
       </td>
     `;

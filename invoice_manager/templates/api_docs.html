@@ -1,188 +1,199 @@
-
 {% extends "base.html" %}
 
 {% block content %}
-<div class="mb-3">
-  <h1 class="h3 mb-0">API Documentation</h1>
-  <div class="section-subtitle">
-    JSON API for customers, products, invoices and payments.
-  </div>
-</div>
-
-<div class="card-dark p-3 p-md-4">
-  <div class="row g-4">
-    <div class="col-lg-5">
-      <h2 class="section-title mb-1">Authentication</h2>
-      <p class="section-subtitle mb-3">
-        All endpoints are authenticated using an API key.
+<div class="row">
+  <div class="col-lg-8">
+    <div class="card-dark p-3 p-md-4 mb-3">
+      <h2 class="mb-2">API Documentation</h2>
+      <p class="text-muted-soft mb-3">
+        Use this API to integrate the invoice system with your own tools and services.
+        All requests must be authenticated with an API key.
       </p>
 
-      <ul class="small text-muted-soft mb-3">
-        <li>Get an API key under <strong>Settings → API keys</strong>.</li>
-        <li>
-          Send it either as a header:
-          <code>X-API-Key: YOUR_KEY</code>
-        </li>
-        <li>
-          …or as a query string parameter:
-          <code>?api_key=YOUR_KEY</code>.
-        </li>
-      </ul>
+      <div class="alert-soft mb-3">
+        <div class="fw-semibold mb-1">Authentication</div>
+        <div class="small">
+          Include your API key in the <code>X-API-Key</code> header:
+        </div>
+        <pre class="mt-2 mb-0 small"><code>GET /api/customers
+X-API-Key: &lt;your-api-key&gt;</code></pre>
+      </div>
 
-      <div class="card-dark-soft p-3 mb-3">
-        <div class="small text-muted-soft mb-1">Example request</div>
-        <pre class="small mb-0"><code>GET /api/invoices?status=sent
-X-API-Key: YOUR_KEY</code></pre>
+      <h5 class="mt-3 mb-2">Base URL</h5>
+      <pre class="small mb-3"><code>{{ request.host_url.rstrip('/') }}/api</code></pre>
+
+      <hr class="my-3" style="border-color: rgba(148,163,184,0.4);">
+
+      <!-- Customers -->
+      <h4 class="mb-2">Customers</h4>
+      <p class="text-muted-soft small mb-2">
+        Create and manage your customers.
+      </p>
+
+      <div class="mb-3">
+        <div class="badge badge-pill badge-soft-blue mb-1">GET /api/customers</div>
+        <div class="small text-muted-soft mb-1">List customers</div>
+        <pre class="small mb-2"><code>GET /api/customers</code></pre>
+      </div>
+
+      <div class="mb-3">
+        <div class="badge badge-pill badge-soft-blue mb-1">GET /api/customers/&lt;id&gt;</div>
+        <div class="small text-muted-soft mb-1">Get a single customer</div>
+        <pre class="small mb-2"><code>GET /api/customers/1</code></pre>
+      </div>
+
+      <div class="mb-3">
+        <div class="badge badge-pill badge-soft-green mb-1">POST /api/customers</div>
+        <div class="small text-muted-soft mb-1">Create a new customer</div>
+        <pre class="small mb-2"><code>POST /api/customers
+Content-Type: application/json
+
+{
+  "name": "Acme Ltd",
+  "email": "billing@acme.com",
+  "address_line1": "123 High Street",
+  "city": "London",
+  "postcode": "SW1A 1AA",
+  "country": "United Kingdom",
+  "tax_rate": 20.0,
+  "use_default_tax": true
+}</code></pre>
+      </div>
+
+      <hr class="my-3" style="border-color: rgba(148,163,184,0.4);">
+
+      <!-- Products -->
+      <h4 class="mb-2">Products</h4>
+      <p class="text-muted-soft small mb-2">
+        Define reusable products and services that can be used on invoices.
+      </p>
+
+      <div class="mb-3">
+        <div class="badge badge-pill badge-soft-blue mb-1">GET /api/products</div>
+        <div class="small text-muted-soft mb-1">List products</div>
+        <pre class="small mb-2"><code>GET /api/products</code></pre>
+      </div>
+
+      <div class="mb-3">
+        <div class="badge badge-pill badge-soft-blue mb-1">GET /api/products/&lt;id&gt;</div>
+        <div class="small text-muted-soft mb-1">Get a single product</div>
+        <pre class="small mb-2"><code>GET /api/products/1</code></pre>
+      </div>
+
+      <div class="mb-3">
+        <div class="badge badge-pill badge-soft-green mb-1">POST /api/products</div>
+        <div class="small text-muted-soft mb-1">Create a new product</div>
+        <pre class="small mb-2"><code>POST /api/products
+Content-Type: application/json
+
+{
+  "name": "Consulting Day Rate",
+  "description": "On-site consulting per day",
+  "unit_price": 900.00,
+  "active": true
+}</code></pre>
+      </div>
+
+      <hr class="my-3" style="border-color: rgba(148,163,184,0.4);">
+
+      <!-- Invoices -->
+      <h4 class="mb-2">Invoices</h4>
+      <p class="text-muted-soft small mb-2">
+        Create invoices with line items and tax.
+      </p>
+
+      <div class="mb-3">
+        <div class="badge badge-pill badge-soft-blue mb-1">GET /api/invoices</div>
+        <div class="small text-muted-soft mb-1">List invoices</div>
+        <pre class="small mb-2"><code>GET /api/invoices</code></pre>
+      </div>
+
+      <div class="mb-3">
+        <div class="badge badge-pill badge-soft-blue mb-1">GET /api/invoices/&lt;id&gt;</div>
+        <div class="small text-muted-soft mb-1">Get a single invoice</div>
+        <pre class="small mb-2"><code>GET /api/invoices/8</code></pre>
+      </div>
+
+      <div class="mb-3">
+        <div class="badge badge-pill badge-soft-green mb-1">POST /api/invoices</div>
+        <div class="small text-muted-soft mb-1">Create a new invoice</div>
+        <pre class="small mb-2"><code>POST /api/invoices
+Content-Type: application/json
+
+{
+  "customer_id": 1,
+  "issue_date": "2025-12-30",
+  "due_date": "2026-01-14",
+  "status": "draft",
+  "tax_rate": 20.0,
+  "items": [
+    {
+      "product_id": 1,
+      "description": "Consulting day",
+      "quantity": 3,
+      "unit_price": 900.00
+    }
+  ]
+}</code></pre>
+      </div>
+
+      <hr class="my-3" style="border-color: rgba(148,163,184,0.4);">
+
+      <!-- Payments -->
+      <h4 class="mb-2">Payments</h4>
+      <p class="text-muted-soft small mb-2">
+        Record payments against invoices.
+      </p>
+
+      <div class="mb-3">
+        <div class="badge badge-pill badge-soft-blue mb-1">GET /api/payments</div>
+        <div class="small text-muted-soft mb-1">List payments</div>
+        <pre class="small mb-2"><code>GET /api/payments</code></pre>
+      </div>
+
+      <div class="mb-3">
+        <div class="badge badge-pill badge-soft-blue mb-1">GET /api/payments/&lt;id&gt;</div>
+        <div class="small text-muted-soft mb-1">Get a single payment</div>
+        <pre class="small mb-2"><code>GET /api/payments/1</code></pre>
+      </div>
+
+      <div class="mb-3">
+        <div class="badge badge-pill badge-soft-green mb-1">POST /api/payments</div>
+        <div class="small text-muted-soft mb-1">Create a new payment</div>
+        <pre class="small mb-0"><code>POST /api/payments
+Content-Type: application/json
+
+{
+  "invoice_id": 8,
+  "amount": 3240.00,
+  "payment_date": "2026-01-05",
+  "method": "Bank transfer",
+  "reference": "INV-8-PAID"
+}</code></pre>
       </div>
     </div>
+  </div>
 
-    <div class="col-lg-7">
-      <h2 class="section-title mb-2">Endpoints</h2>
+  <div class="col-lg-4">
+    <div class="card-dark p-3 p-md-4">
+      <h5 class="mb-2">Permissions</h5>
+      <p class="text-muted-soft small mb-2">
+        Each API key has separate <strong>read</strong> and <strong>write</strong> permissions.
+      </p>
+      <ul class="small text-muted-soft mb-3">
+        <li>Read: can call <code>GET</code> endpoints.</li>
+        <li>Write: can call <code>POST</code> endpoints.</li>
+      </ul>
 
-      <div class="table-responsive mb-3">
-        <table class="table table-dark align-middle mb-0">
-          <thead>
-          <tr>
-            <th style="width: 12%;">Method</th>
-            <th style="width: 40%;">Path</th>
-            <th style="width: 48%;">Description</th>
-          </tr>
-          </thead>
-          <tbody>
-          <!-- Customers -->
-          <tr>
-            <td><span class="badge badge-pill badge-soft-blue">GET</span></td>
-            <td><code>/api/customers</code></td>
-            <td class="small">
-              List customers. Optional <code>?q=search</code> to filter by name/email.
-            </td>
-          </tr>
-          <tr>
-            <td><span class="badge badge-pill badge-soft-blue">GET</span></td>
-            <td><code>/api/customers/&lt;id&gt;</code></td>
-            <td class="small">Get a single customer by ID.</td>
-          </tr>
-          <tr>
-            <td><span class="badge badge-pill badge-soft-amber">POST</span></td>
-            <td><code>/api/customers</code></td>
-            <td class="small">Create a new customer.</td>
-          </tr>
-          <tr>
-            <td><span class="badge badge-pill badge-soft-amber">PUT</span></td>
-            <td><code>/api/customers/&lt;id&gt;</code></td>
-            <td class="small">Update an existing customer.</td>
-          </tr>
-
-          <!-- Products -->
-          <tr>
-            <td colspan="3" class="pt-3 pb-1 small text-muted-soft">
-              <strong>Products</strong>
-            </td>
-          </tr>
-          <tr>
-            <td><span class="badge badge-pill badge-soft-blue">GET</span></td>
-            <td><code>/api/products</code></td>
-            <td class="small">
-              List products. Optional <code>?active=true|false</code>.
-            </td>
-          </tr>
-          <tr>
-            <td><span class="badge badge-pill badge-soft-blue">GET</span></td>
-            <td><code>/api/products/&lt;id&gt;</code></td>
-            <td class="small">Get a single product.</td>
-          </tr>
-          <tr>
-            <td><span class="badge badge-pill badge-soft-amber">POST</span></td>
-            <td><code>/api/products</code></td>
-            <td class="small">Create a new product.</td>
-          </tr>
-          <tr>
-            <td><span class="badge badge-pill badge-soft-amber">PUT</span></td>
-            <td><code>/api/products/&lt;id&gt;</code></td>
-            <td class="small">Update a product.</td>
-          </tr>
-
-          <!-- Invoices -->
-          <tr>
-            <td colspan="3" class="pt-3 pb-1 small text-muted-soft">
-              <strong>Invoices</strong>
-            </td>
-          </tr>
-          <tr>
-            <td><span class="badge badge-pill badge-soft-blue">GET</span></td>
-            <td><code>/api/invoices</code></td>
-            <td class="small">
-              List invoices. Optional filters:
-              <code>?status=sent</code>,
-              <code>?customer_id=1</code>,
-              <code>?invoice_number=INV-…</code>.
-            </td>
-          </tr>
-          <tr>
-            <td><span class="badge badge-pill badge-soft-blue">GET</span></td>
-            <td><code>/api/invoices/&lt;id&gt;</code></td>
-            <td class="small">Get a single invoice including items &amp; payments.</td>
-          </tr>
-          <tr>
-            <td><span class="badge badge-pill badge-soft-amber">POST</span></td>
-            <td><code>/api/invoices</code></td>
-            <td class="small">
-              Create an invoice. Supports either <code>customer_id</code> or an
-              inline <code>customer</code> object.
-            </td>
-          </tr>
-          <tr>
-            <td><span class="badge badge-pill badge-soft-amber">PUT</span></td>
-            <td><code>/api/invoices/&lt;id&gt;</code></td>
-            <td class="small">Update invoice details and line items.</td>
-          </tr>
-
-          <!-- Payments -->
-          <tr>
-            <td colspan="3" class="pt-3 pb-1 small text-muted-soft">
-              <strong>Payments</strong>
-            </td>
-          </tr>
-          <tr>
-            <td><span class="badge badge-pill badge-soft-blue">GET</span></td>
-            <td><code>/api/payments</code></td>
-            <td class="small">
-              List payments. Optional <code>?invoice_id=123</code>.
-            </td>
-          </tr>
-          <tr>
-            <td><span class="badge badge-pill badge-soft-blue">GET</span></td>
-            <td><code>/api/payments/&lt;id&gt;</code></td>
-            <td class="small">Get a single payment.</td>
-          </tr>
-          <tr>
-            <td><span class="badge badge-pill badge-soft-amber">POST</span></td>
-            <td><code>/api/payments</code></td>
-            <td class="small">Record a payment against an invoice.</td>
-          </tr>
-
-          <!-- Webhook -->
-          <tr>
-            <td colspan="3" class="pt-3 pb-1 small text-muted-soft">
-              <strong>Incoming webhook</strong>
-            </td>
-          </tr>
-          <tr>
-            <td><span class="badge badge-pill badge-soft-amber">POST</span></td>
-            <td><code>/api/webhooks/payment</code></td>
-            <td class="small">
-              Record a payment using <code>invoice_number</code>, e.g. from a payment gateway.
-            </td>
-          </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div class="small text-muted-soft">
-        All endpoints return JSON. When something goes wrong, you’ll get an HTTP error code
-        (4xx / 5xx) with a response body like:
-        <pre class="small mt-2 mb-0"><code>{ "error": "message here" }</code></pre>
-      </div>
+      <h6 class="mb-1">HTTP responses</h6>
+      <ul class="small text-muted-soft mb-0">
+        <li><code>200</code> – OK</li>
+        <li><code>201</code> – Created</li>
+        <li><code>400</code> – Validation error</li>
+        <li><code>401</code> – Invalid or missing API key</li>
+        <li><code>403</code> – Not enough permissions (e.g. write required)</li>
+        <li><code>404</code> – Not found</li>
+      </ul>
     </div>
   </div>
 </div>
