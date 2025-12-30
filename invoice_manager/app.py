@@ -329,6 +329,19 @@ def get_settings():
         db.session.add(settings)
         db.session.commit()
 
+        @app.context_processor
+def inject_settings():
+    """
+    Make `settings` available in EVERY template automatically.
+    This fixes 'settings is undefined' errors in base.html, invoices_list.html, etc.
+    """
+    try:
+        return {"settings": get_settings()}
+    except Exception:
+        # In case DB isn't ready during initial setup, don't break the whole app
+        return {"settings": None}
+
+
     # ensure new columns have defaults if DB was older
     changed = False
     if settings.outbound_webhook_events is None:
