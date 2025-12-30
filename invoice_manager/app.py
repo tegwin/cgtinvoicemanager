@@ -1003,12 +1003,10 @@ def invoice_detail(invoice_id):
 @app.route("/invoices/<int:invoice_id>/pdf")
 @login_required
 def invoice_pdf(invoice_id):
-    """
-    Renders a printable HTML invoice; your template can trigger browser print
-    or you can pipe it through wkhtmltopdf/WeasyPrint externally if you like.
-    """
+    """Render a clean HTML view for printing / saving as PDF."""
     invoice = Invoice.query.get_or_404(invoice_id)
-    return render_template("invoice_pdf.html", invoice=invoice)
+    return render_template("invoice_print.html", invoice=invoice)
+
 
 
 @app.route("/invoices/<int:invoice_id>/payments/new", methods=["POST"])

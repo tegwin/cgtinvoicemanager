@@ -6,218 +6,372 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <style>
+    :root {
+      --border-subtle: #d1d5db;
+      --text-muted: #6b7280;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       margin: 0;
-      padding: 0;
+      padding: 2rem;
       background: #f3f4f6;
       color: #111827;
     }
+
     .page {
-      max-width: 800px;
-      margin: 2rem auto;
-      background: #ffffff;
-      padding: 2rem 2.5rem;
-      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15);
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      padding: 2.5rem 2.75rem;
+      border-radius: 0.75rem;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
     }
-    h1, h2, h3, h4 {
-      margin: 0;
-    }
+
     .header {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
+      gap: 2rem;
       margin-bottom: 2rem;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 1.25rem;
     }
-    .brand-name {
-      font-size: 1.4rem;
+
+    .brand-block {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .brand-title {
+      font-size: 1.35rem;
       font-weight: 700;
-      letter-spacing: 0.02em;
     }
-    .muted {
-      color: #6b7280;
+
+    .brand-subtitle {
       font-size: 0.9rem;
+      color: var(--text-muted);
     }
+
     .invoice-meta {
       text-align: right;
       font-size: 0.9rem;
     }
-    .section-title {
-      font-size: 0.9rem;
+
+    .invoice-meta h1 {
+      margin: 0;
+      font-size: 1.6rem;
+      letter-spacing: 0.05em;
       text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: #6b7280;
-      margin-bottom: 0.25rem;
     }
+
+    .muted {
+      color: var(--text-muted);
+    }
+
+    .section-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #4b5563;
+      margin-bottom: 0.5rem;
+    }
+
+    .two-col {
+      display: flex;
+      justify-content: space-between;
+      gap: 3rem;
+      margin-bottom: 1.75rem;
+    }
+
+    .two-col > div {
+      flex: 1;
+    }
+
     .box {
-      border: 1px solid #e5e7eb;
+      border: 1px solid var(--border-subtle);
       border-radius: 0.5rem;
       padding: 0.75rem 1rem;
-      font-size: 0.9rem;
-      margin-bottom: 1.5rem;
+      background: #f9fafb;
     }
+
+    .customer-name {
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+
+    .small {
+      font-size: 0.85rem;
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
+      margin-top: 0.75rem;
       font-size: 0.9rem;
     }
-    th, td {
-      border-bottom: 1px solid #e5e7eb;
-      padding: 0.6rem 0.4rem;
+
+    thead th {
       text-align: left;
-    }
-    th {
+      padding: 0.65rem 0.75rem;
+      border-bottom: 1px solid var(--border-subtle);
+      background: #f9fafb;
       font-size: 0.8rem;
       text-transform: uppercase;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.06em;
       color: #6b7280;
     }
-    .text-right {
+
+    tbody td {
+      padding: 0.55rem 0.75rem;
+      border-bottom: 1px solid #e5e7eb;
+      vertical-align: top;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .text-end {
       text-align: right;
     }
+
     .totals {
-      margin-top: 1rem;
-      width: 260px;
-      margin-left: auto;
-      font-size: 0.9rem;
-    }
-    .totals-row {
+      margin-top: 2rem;
       display: flex;
-      justify-content: space-between;
-      margin-bottom: 0.25rem;
+      justify-content: flex-end;
     }
-    .totals-row.total {
-      font-weight: 600;
-      margin-top: 0.5rem;
-      border-top: 1px solid #e5e7eb;
-      padding-top: 0.4rem;
-    }
-    .notes {
-      margin-top: 1.5rem;
+
+    .totals-table {
+      width: 320px;
+      border-collapse: collapse;
       font-size: 0.9rem;
     }
+
+    .totals-table td {
+      padding: 0.35rem 0;
+    }
+
+    .totals-label {
+      color: var(--text-muted);
+    }
+
+    .totals-value {
+      text-align: right;
+      font-weight: 500;
+    }
+
+    .totals-grand td {
+      border-top: 1px solid var(--border-subtle);
+      padding-top: 0.6rem;
+      margin-top: 0.25rem;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .balance-due td {
+      padding-top: 0.6rem;
+      font-weight: 600;
+    }
+
+    .notes {
+      margin-top: 2rem;
+      font-size: 0.9rem;
+    }
+
+    .notes .box {
+      background: #fefce8;
+      border-color: #facc15;
+    }
+
+    .footer-text {
+      margin-top: 2rem;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
     @media print {
       body {
-        background: #ffffff;
+        background: white;
+        padding: 0;
       }
       .page {
-        margin: 0;
         box-shadow: none;
+        border-radius: 0;
+        max-width: 100%;
       }
     }
   </style>
 </head>
 <body>
 <div class="page">
+  <!-- Header -->
   <div class="header">
-    <div>
-      <div class="brand-name">{{ settings.brand_name or "Invoice" }}</div>
-      {% if settings.logo_url %}
-        <div style="margin-top: 0.5rem;">
-          <img src="{{ settings.logo_url }}" alt="Logo" style="max-height: 48px;">
-        </div>
-      {% endif %}
+    <div class="brand-block">
+      <div class="brand-title">
+        {{ invoice.customer.name|default('Invoice', true) }}
+      </div>
+      <div class="brand-subtitle muted">
+        Invoice for {{ invoice.customer.name }}
+      </div>
     </div>
     <div class="invoice-meta">
-      <h2>Invoice</h2>
-      <div>#{{ invoice.invoice_number }}</div>
-      <div class="muted">Issued {{ invoice.issue_date }}</div>
-      <div class="muted">Due {{ invoice.due_date }}</div>
-      <div class="muted">Status: {{ invoice.status|capitalize }}</div>
-    </div>
-  </div>
-
-  <div class="row" style="display: flex; gap: 1.5rem; margin-bottom: 1.5rem;">
-    <div style="flex: 1;">
-      <div class="section-title">Bill to</div>
-      <div class="box">
-        {% if invoice.customer %}
-          <div><strong>{{ invoice.customer.name }}</strong></div>
-          {% if invoice.customer.email %}
-            <div>{{ invoice.customer.email }}</div>
-          {% endif %}
-          {% if invoice.customer.address_line1 %}
-            <div>{{ invoice.customer.address_line1 }}</div>
-          {% endif %}
-          {% if invoice.customer.address_line2 %}
-            <div>{{ invoice.customer.address_line2 }}</div>
-          {% endif %}
-          {% if invoice.customer.city or invoice.customer.postcode %}
-            <div>
-              {{ invoice.customer.city }} {{ invoice.customer.postcode }}
-            </div>
-          {% endif %}
-          {% if invoice.customer.country %}
-            <div>{{ invoice.customer.country }}</div>
-          {% endif %}
-        {% else %}
-          <div class="muted">No customer attached to this invoice.</div>
+      <h1>Invoice</h1>
+      <div>Invoice # <strong>{{ invoice.invoice_number }}</strong></div>
+      <div class="muted">
+        Issued: {{ invoice.issue_date }}
+        {% if invoice.due_date %}
+          &nbsp;|&nbsp; Due: {{ invoice.due_date }}
         {% endif %}
+      </div>
+      <div class="muted">
+        Status:
+        <strong>
+          {{ invoice.status|capitalize }}
+        </strong>
       </div>
     </div>
   </div>
 
-  <div class="section-title">Line items</div>
-  <table>
-    <thead>
-      <tr>
-        <th style="width: 30%;">Product</th>
-        <th style="width: 40%;">Description</th>
-        <th class="text-right" style="width: 10%;">Qty</th>
-        <th class="text-right" style="width: 10%;">Unit</th>
-        <th class="text-right" style="width: 10%;">Total</th>
-      </tr>
-    </thead>
-    <tbody>
-    {% if invoice.items %}
-      {% for item in invoice.items %}
-        <tr>
-          <td>
-            {% if item.product %}
-              {{ item.product.name }}
-            {% else %}
-              Manual
-            {% endif %}
-          </td>
-          <td>{{ item.description }}</td>
-          <td class="text-right">{{ "%.2f"|format(item.quantity) }}</td>
-          <td class="text-right">{{ "%.2f"|format(item.unit_price) }}</td>
-          <td class="text-right">{{ "%.2f"|format(item.line_total) }}</td>
-        </tr>
-      {% endfor %}
-    {% else %}
-      <tr>
-        <td colspan="5" class="muted">No line items on this invoice.</td>
-      </tr>
-    {% endif %}
-    </tbody>
-  </table>
-
-  <div class="totals">
-    <div class="totals-row">
-      <span>Subtotal</span>
-      <span>{{ "%.2f"|format(invoice.subtotal_amount) }}</span>
+  <!-- Bill to / summary -->
+  <div class="two-col">
+    <div>
+      <div class="section-title">Bill to</div>
+      <div class="box small">
+        <div class="customer-name">{{ invoice.customer.name }}</div>
+        {% if invoice.customer.email %}
+        <div>{{ invoice.customer.email }}</div>
+        {% endif %}
+        {% if invoice.customer.phone %}
+        <div>{{ invoice.customer.phone }}</div>
+        {% endif %}
+        {% if invoice.customer.address_line1 %}
+        <div>{{ invoice.customer.address_line1 }}</div>
+        {% endif %}
+        {% if invoice.customer.address_line2 %}
+        <div>{{ invoice.customer.address_line2 }}</div>
+        {% endif %}
+        {% if invoice.customer.city or invoice.customer.postcode %}
+        <div>
+          {{ invoice.customer.city }}{% if invoice.customer.postcode %}, {{ invoice.customer.postcode }}{% endif %}
+        </div>
+        {% endif %}
+        {% if invoice.customer.country %}
+        <div>{{ invoice.customer.country }}</div>
+        {% endif %}
+      </div>
     </div>
-    <div class="totals-row">
-      <span>VAT{% if invoice.tax_rate is not none %} ({{ "%.2f"|format(invoice.tax_rate) }}%){% endif %}</span>
-      <span>{{ "%.2f"|format(invoice.tax_amount) }}</span>
-    </div>
-    <div class="totals-row total">
-      <span>Total</span>
-      <span>{{ "%.2f"|format(invoice.total_amount) }}</span>
-    </div>
-    <div class="totals-row">
-      <span>Balance due</span>
-      <span>{{ "%.2f"|format(invoice.balance_due) }}</span>
+    <div>
+      <div class="section-title">Summary</div>
+      <div class="box small">
+        <div>
+          <span class="muted">Subtotal:</span>
+          <span style="float:right;">
+            {{ "%.2f"|format(invoice.subtotal_amount) }}
+          </span>
+        </div>
+        <div>
+          <span class="muted">
+            VAT{% if invoice.tax_rate is not none %} ({{ "%.2f"|format(invoice.tax_rate) }}%){% endif %}:
+          </span>
+          <span style="float:right;">
+            {{ "%.2f"|format(invoice.tax_amount) }}
+          </span>
+        </div>
+        <div style="margin-top:0.5rem; font-weight:600;">
+          <span>Total:</span>
+          <span style="float:right;">
+            {{ "%.2f"|format(invoice.total_amount) }}
+          </span>
+        </div>
+      </div>
     </div>
   </div>
 
+  <!-- Line items -->
+  <div>
+    <div class="section-title">Line items</div>
+    <table>
+      <thead>
+      <tr>
+        <th style="width: 45%;">Description</th>
+        <th style="width: 15%;" class="text-end">Qty</th>
+        <th style="width: 20%;" class="text-end">Unit price</th>
+        <th style="width: 20%;" class="text-end">Line total</th>
+      </tr>
+      </thead>
+      <tbody>
+      {% if invoice.items %}
+        {% for item in invoice.items %}
+        <tr>
+          <td>{{ item.description }}</td>
+          <td class="text-end">{{ "%.2f"|format(item.quantity) }}</td>
+          <td class="text-end">{{ "%.2f"|format(item.unit_price) }}</td>
+          <td class="text-end">{{ "%.2f"|format(item.line_total) }}</td>
+        </tr>
+        {% endfor %}
+      {% else %}
+        <tr>
+          <td colspan="4" class="muted">
+            No line items on this invoice.
+          </td>
+        </tr>
+      {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Totals block -->
+  <div class="totals">
+    <table class="totals-table">
+      <tr>
+        <td class="totals-label">Subtotal</td>
+        <td class="totals-value">
+          {{ "%.2f"|format(invoice.subtotal_amount) }}
+        </td>
+      </tr>
+      <tr>
+        <td class="totals-label">
+          VAT{% if invoice.tax_rate is not none %} ({{ "%.2f"|format(invoice.tax_rate) }}%){% endif %}
+        </td>
+        <td class="totals-value">
+          {{ "%.2f"|format(invoice.tax_amount) }}
+        </td>
+      </tr>
+      <tr class="totals-grand">
+        <td>Total</td>
+        <td class="text-end">
+          {{ "%.2f"|format(invoice.total_amount) }}
+        </td>
+      </tr>
+      <tr class="balance-due">
+        <td>Balance due</td>
+        <td class="text-end">
+          {{ "%.2f"|format(invoice.balance_due) }}
+        </td>
+      </tr>
+    </table>
+  </div>
+
   {% if invoice.notes %}
-    <div class="notes">
-      <div class="section-title">Notes</div>
-      <div>{{ invoice.notes }}</div>
+  <div class="notes">
+    <div class="section-title">Notes</div>
+    <div class="box">
+      {{ invoice.notes }}
     </div>
+  </div>
   {% endif %}
+
+  <div class="footer-text">
+    Thank you for your business.
+  </div>
 </div>
 </body>
 </html>
