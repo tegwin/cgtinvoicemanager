@@ -1,140 +1,55 @@
 {% extends "base.html" %}
+
 {% block content %}
-<div class="page-header">
-  <h1 class="page-title">📚 API Documentation</h1>
-  <p class="page-subtitle">
-    Use these HTTP endpoints together with your API keys to integrate other systems.
-    Full key values are only shown once on the API Keys page when you create them.
+<div class="page-header mb-4">
+  <h2 class="mb-1">API Documentation</h2>
+  <p class="text-muted mb-0">
+    Use the REST API to create, update, and pay invoices from other systems.
   </p>
 </div>
 
-<div class="panel">
-  <div class="panel-header">
-    <div>
-      <div class="panel-title">Authentication</div>
-      <div class="panel-subtitle">
-        Every request must include a valid API key.
-      </div>
-    </div>
-  </div>
-
-  <p class="mb-3">
-    1. Go to <strong>API Keys</strong> and create a key for each system that needs access.<br>
-    2. Copy the key when it is first shown – it will not be displayed again.<br>
-    3. Use one of the following ways to send it:
+<div class="card-dark p-3 p-md-4 mb-4">
+  <h5 class="mb-3">Authentication</h5>
+  <p class="mb-2">
+    Include your API key in the <code class="code-chip">X-API-Key</code> header.
   </p>
-
-  <ul class="text-muted" style="font-size: 0.9rem;">
-    <li>HTTP header: <code>X-API-Key: &lt;your_key_here&gt;</code></li>
-    <li>OR query string: <code>?api_key=&lt;your_key_here&gt;</code></li>
-  </ul>
+  <pre class="code-block mb-0"><code>curl -X GET \
+  "{{ url_for('api_get_invoice', invoice_id=123, _external=True) }}" \
+  -H "X-API-Key: {{ (example_key.key if example_key else 'YOUR_KEY_HERE')[:24] }}..."</code></pre>
 </div>
 
-<div class="panel">
-  <div class="panel-header">
-    <div>
-      <div class="panel-title">Base URL</div>
-      <div class="panel-subtitle">
-        Your current server hostname is used below.
-      </div>
-    </div>
-  </div>
-
-  <p class="mb-3">
-    Base URL:
-    <code>http://{{ request.host }}/api</code>
-  </p>
-
-  <p class="text-muted" style="font-size: 0.9rem;">
-    All endpoints below assume that base.
-  </p>
-</div>
-
-<div class="panel">
-  <div class="panel-header">
-    <div>
-      <div class="panel-title">Create Invoice – <code>POST /api/invoices</code></div>
-      <div class="panel-subtitle">Create an invoice (optionally creating the customer as well).</div>
-    </div>
-  </div>
-
-<pre><code>POST http://{{ request.host }}/api/invoices
-Headers:
-  Content-Type: application/json
-  X-API-Key: &lt;your_key_here&gt;
-
-Body:
-{
+<div class="card-dark p-3 p-md-4 mb-4">
+  <h5 class="mb-3">Create invoice (write)</h5>
+  <p class="text-muted small mb-2">POST <code class="code-chip">/api/invoices</code></p>
+  <pre class="code-block mb-0"><code>{
   "customer": {
-    "name": "API Test Ltd",
-    "email": "api@example.com"
+    "name": "ACME Ltd",
+    "email": "accounts@example.com"
   },
-  "issue_date": "2025-12-29",
-  "due_date": "2026-01-15",
-  "status": "sent",
-  "notes": "Created via API",
+  "issue_date": "2025-01-01",
+  "due_date": "2025-01-14",
   "items": [
-    { "description": "Consulting", "quantity": 2, "unit_price": 150.00 }
+    {
+      "description": "Consulting",
+      "quantity": 1,
+      "unit_price": 500.00
+    }
   ]
 }</code></pre>
 </div>
 
-<div class="panel">
-  <div class="panel-header">
-    <div>
-      <div class="panel-title">Get Invoice – <code>GET /api/invoices/&lt;id&gt;</code></div>
-      <div class="panel-subtitle">Fetch invoice + items + payments.</div>
-    </div>
-  </div>
-
-<pre><code>GET http://{{ request.host }}/api/invoices/1
-X-API-Key: &lt;your_key_here&gt;</code></pre>
-</div>
-
-<div class="panel">
-  <div class="panel-header">
-    <div>
-      <div class="panel-title">Update Invoice – <code>PUT /api/invoices/&lt;id&gt;</code></div>
-      <div class="panel-subtitle">Change status, notes, or replace items.</div>
-    </div>
-  </div>
-
-<pre><code>PUT http://{{ request.host }}/api/invoices/1
-Headers:
-  Content-Type: application/json
-  X-API-Key: &lt;your_key_here&gt;
-
-Body:
-{
-  "status": "paid",
-  "notes": "Paid via bank transfer",
-  "items": [
-    { "description": "Updated item", "quantity": 3, "unit_price": 120.00 }
-  ]
+<div class="card-dark p-3 p-md-4">
+  <h5 class="mb-3">Payment webhook (write)</h5>
+  <p class="text-muted small mb-2">
+    POST <code class="code-chip">/api/webhooks/payment</code>
+  </p>
+  <pre class="code-block mb-0"><code>{
+  "invoice_number": "INV-20250101-0001",
+  "amount": 500.00,
+  "payment_date": "2025-01-05",
+  "method": "Bank transfer",
+  "external_reference": "PAY-123456"
 }</code></pre>
 </div>
-
-<div class="panel">
-  <div class="panel-header">
-    <div>
-      <div class="panel-title">Payment Webhook – <code>POST /api/webhooks/payment</code></div>
-      <div class="panel-subtitle">Record external payments by invoice number.</div>
-    </div>
-  </div>
-
-<pre><code>POST http://{{ request.host }}/api/webhooks/payment
-Headers:
-  Content-Type: application/json
-  X-API-Key: &lt;your_key_here&gt;
-
-Body:
-{
-  "invoice_number": "INV-20251229-0001",
-  "amount": 300.00,
-  "payment_date": "2025-12-30",
-  "method": "Card",
-  "external_reference": "STRIPE-123456"
-}</code></pre>
-</div>
-
 {% endblock %}
+

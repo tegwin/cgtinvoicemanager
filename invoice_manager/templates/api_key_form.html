@@ -1,30 +1,74 @@
 {% extends "base.html" %}
-{% block content %}
-<div class="page-header">
-  <h1 class="page-title">New API Key</h1>
-  <p class="page-subtitle">
-    Create a new API key for a specific integration (e.g. website, accounts system, payment gateway).
-  </p>
-</div>
 
-<div class="panel">
+{% block content %}
+<div class="card-dark p-3 p-md-4 mb-4">
+  <div class="d-flex align-items-center mb-3">
+    <div class="me-3">
+      <span class="emoji-circle">🔑</span>
+    </div>
+    <div>
+      <h3 class="mb-1">Create New API Key</h3>
+      <p class="text-muted mb-0">Give your integration a name and choose its permissions.</p>
+    </div>
+  </div>
+
   <form method="post">
     <div class="mb-3">
-      <label class="form-label">Name / label</label>
-      <input name="name" class="form-control" required
-             placeholder="e.g. Xero Integration, Website Checkout">
+      <label class="form-label">Key name</label>
+      <input type="text" name="name" class="form-control"
+             placeholder="My Integration"
+             value="{{ api_key.name if api_key else '' }}" required>
     </div>
 
     <div class="mb-3">
-      <label class="form-label">Key value (optional)</label>
-      <input name="key" class="form-control"
-             placeholder="Leave blank to auto-generate a random key">
+      <label class="form-label">Permissions</label>
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="perm-read" name="can_read"
+               {% if not api_key or api_key.can_read %}checked{% endif %}>
+        <label class="form-check-label" for="perm-read">
+          Read (view customers, invoices, stats)
+        </label>
+      </div>
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="perm-write" name="can_write"
+               {% if not api_key or api_key.can_write %}checked{% endif %}>
+        <label class="form-check-label" for="perm-write">
+          Write (create &amp; edit invoices, record payments)
+        </label>
+      </div>
       <div class="form-text">
-        If you leave this empty, a secure random key will be generated for you.
+        At least one permission must be enabled.
       </div>
     </div>
 
-    <button class="btn btn-primary">Create</button>
+    <div class="mb-3">
+      <label class="form-label">Custom key value (optional)</label>
+      <input type="text" name="key" class="form-control"
+             placeholder="Leave blank to generate a secure random key">
+      <div class="form-text">
+        If left empty, a 64-character secure key will be generated for you.
+      </div>
+    </div>
+
+    <div class="d-flex justify-content-between">
+      <a href="{{ url_for('api_keys_list') }}" class="btn btn-outline-light">Cancel</a>
+      <button type="submit" class="btn btn-primary">
+        <i class="fa-solid fa-key me-2"></i>Generate API Key
+      </button>
+    </div>
   </form>
 </div>
+
+{% if session.new_api_key %}
+<div class="card-dark p-3 p-md-4 mt-4">
+  <h5 class="mb-3 text-warning">Important</h5>
+  <p class="text-muted small mb-2">
+    This is the <strong>only time</strong> we will show you the full value of this API key.
+    Copy it somewhere safe – you won’t be able to see it again.
+  </p>
+  <pre class="code-block mb-0"><code>{{ session.new_api_key }}</code></pre>
+</div>
+{% set _ = session.pop('new_api_key', None) %}
+{% set _ = session.pop('new_api_key_name', None) %}
+{% endif %}
 {% endblock %}

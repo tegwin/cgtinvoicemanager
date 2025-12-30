@@ -3,8 +3,8 @@ import csv
 import io
 from datetime import datetime, date
 from decimal import Decimal
-from secrets import token_hex
 from functools import wraps
+from secrets import token_hex
 
 import requests
 from flask import (
@@ -12,76 +12,45 @@ from flask import (
     flash, jsonify, abort, session
 )
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
 
-# -----------------------
-# Config & setup
-# -----------------------
+
+# --------------------------------------------------------------------
+# App & DB config
+# --------------------------------------------------------------------
 
 app = Flask(__name__)
-
-# Secret key for sessions / flashes (change in production if you want)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 
-# IMPORTANT: database credentials – we will keep these stable
+# Default to Docker MySQL if DATABASE_URL not set
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
     "DATABASE_URL",
-    "mysql+pymysql://root:password@db/invoicemanager"
+    "mysql+pymysql://invoicemgr:invoicemgr@db/invoicemanager"
 )
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-
-# Simple app login credentials (for the web UI)
-app.config["ADMIN_USERNAME"] = os.environ.get("ADMIN_USERNAME", "admin")
-app.config["ADMIN_PASSWORD"] = os.environ.get("ADMIN_PASSWORD", "admin123")
 
 db = SQLAlchemy(app)
 
 
-# -----------------------
-# Auth helpers
-# -----------------------
-
-def login_required(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        if not session.get("user_logged_in"):
-            return redirect(url_for("login", next=request.path))
-        return f(*args, **kwargs)
-    return wrapper
-
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if session.get("user_logged_in"):
-        return redirect(url_for("list_invoices"))
-
-    if request.method == "POST":
-        username = (request.form.get("username") or "").strip()
-        password = request.form.get("password") or ""
-
-        if (username == app.config["ADMIN_USERNAME"] and
-                password == app.config["ADMIN_PASSWORD"]):
-            session["user_logged_in"] = True
-            session["user_name"] = username
-            flash("You are now logged in.", "success")
-            next_url = request.args.get("next") or url_for("list_invoices")
-            return redirect(next_url)
-        else:
-            flash("Invalid username or password.", "danger")
-
-    return render_template("login.html")
-
-
-@app.route("/logout", methods=["GET", "POST"])
-def logout():
-    """Allow logout via GET and POST so the navbar link works (no more 405)."""
-    session.clear()
-    flash("You have been logged out.", "success")
-    return redirect(url_for("login"))
-
-
-# -----------------------
+# --------------------------------------------------------------------
 # Models
-# -----------------------
+# --------------------------------------------------------------------
+
+class User(db.Model):
+    __tablename__ = "users"
+
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(150), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    is_admin = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    def set_password(self, raw: str):
+        self.password_hash = generate_password_hash(raw)
+
+    def check_password(self, raw: str) -> bool:
+        return check_password_hash(self.password_hash, raw)
+
 
 class Customer(db.Model):
     __tablename__ = "customers"
@@ -96,8 +65,7 @@ class Customer(db.Model):
     postcode = db.Column(db.String(50))
     country = db.Column(db.String(100))
 
-    # Tax settings
-    tax_rate = db.Column(db.Numeric(5, 2))  # percentage, e.g. 20.00
+    tax_rate = db.Column(db.Numeric(5, 2))
     use_default_tax = db.Column(db.Boolean, nullable=False, default=True)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -118,7 +86,9 @@ class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text)
-    unit_price = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    unit_price = db.Column(db.Numeric(10, 2), nullable=False)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(
         db.DateTime, nullable=False,
@@ -137,14 +107,14 @@ class Invoice(db.Model):
     invoice_number = db.Column(db.String(50), unique=True, nullable=False)
     issue_date = db.Column(db.Date, nullable=False)
     due_date = db.Column(db.Date, nullable=False)
-    status = db.Column(db.Enum("draft", "sent", "paid", "overdue", "cancelled",
-                               name="invoice_status"),
-                       nullable=False, default="draft")
+    status = db.Column(
+        db.Enum("draft", "sent", "paid", "overdue", "cancelled", name="invoice_status"),
+        nullable=False, default="draft"
+    )
     notes = db.Column(db.Text)
 
-    # Money
     subtotal_amount = db.Column(db.Numeric(10, 2), nullable=False, default=0)
-    tax_rate = db.Column(db.Numeric(5, 2))  # percentage e.g. 20.00
+    tax_rate = db.Column(db.Numeric(5, 2))
     tax_amount = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     total_amount = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     balance_due = db.Column(db.Numeric(10, 2), nullable=False, default=0)
@@ -213,16 +183,19 @@ class InvoiceItem(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     invoice_id = db.Column(db.Integer, db.ForeignKey("invoices.id"), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey("products.id"))
     description = db.Column(db.String(255), nullable=False)
     quantity = db.Column(db.Numeric(10, 2), nullable=False)
     unit_price = db.Column(db.Numeric(10, 2), nullable=False)
     line_total = db.Column(db.Numeric(10, 2), nullable=False)
 
     invoice = db.relationship("Invoice", back_populates="items")
+    product = db.relationship("Product")
 
     def to_dict(self):
         return {
             "id": self.id,
+            "product_id": self.product_id,
             "description": self.description,
             "quantity": float(self.quantity),
             "unit_price": float(self.unit_price),
@@ -259,11 +232,8 @@ class Settings(db.Model):
     __tablename__ = "settings"
 
     id = db.Column(db.Integer, primary_key=True)
-    default_tax_rate = db.Column(db.Numeric(5, 2),
-                                 nullable=False,
+    default_tax_rate = db.Column(db.Numeric(5, 2), nullable=False,
                                  default=Decimal("0.00"))
-
-    # Outbound webhook config
     outbound_webhook_url = db.Column(db.String(500))
     outbound_webhook_enabled = db.Column(db.Boolean, nullable=False, default=False)
 
@@ -274,26 +244,56 @@ class APIKey(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
     key = db.Column(db.String(64), unique=True, nullable=False)
+    can_read = db.Column(db.Boolean, nullable=False, default=True)
+    can_write = db.Column(db.Boolean, nullable=False, default=True)
     active = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     last_used_at = db.Column(db.DateTime)
 
 
-# -----------------------
+# --------------------------------------------------------------------
 # Helpers
-# -----------------------
+# --------------------------------------------------------------------
+
+def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("user_id"):
+            return redirect(url_for("login", next=request.path))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def current_user():
+    uid = session.get("user_id")
+    if not uid:
+        return None
+    return User.query.get(uid)
+
+
+@app.context_processor
+def inject_globals():
+    return {"current_user": current_user()}
+
 
 def generate_api_key_value():
     return token_hex(32)
 
 
-def require_api_key():
+def require_api_key(permission: str = "read") -> APIKey:
     key_value = request.headers.get("X-API-Key") or request.args.get("api_key")
     if not key_value:
         abort(401, description="Missing API key")
+
     api_key = APIKey.query.filter_by(key=key_value, active=True).first()
     if not api_key:
         abort(401, description="Invalid or inactive API key")
+
+    if permission == "read" and not api_key.can_read:
+        abort(403, description="API key does not have read permission")
+    if permission == "write" and not api_key.can_write:
+        abort(403, description="API key does not have write permission")
+
     api_key.last_used_at = datetime.utcnow()
     db.session.commit()
     return api_key
@@ -326,7 +326,7 @@ def get_settings():
     return settings
 
 
-def determine_tax_rate_for_customer(customer):
+def determine_tax_rate_for_customer(customer: Customer | None):
     settings = get_settings()
     if customer is None:
         return settings.default_tax_rate
@@ -336,11 +336,6 @@ def determine_tax_rate_for_customer(customer):
 
 
 def send_outbound_webhook(event_type: str, payload: dict):
-    """
-    Send a JSON webhook to the configured outbound_webhook_url.
-    Does nothing if not enabled or URL blank.
-    Never raises back to the caller – errors are just printed.
-    """
     settings = get_settings()
     if not settings.outbound_webhook_enabled or not settings.outbound_webhook_url:
         return
@@ -357,14 +352,45 @@ def send_outbound_webhook(event_type: str, payload: dict):
             json=body,
             timeout=5,
         )
-        print(f"[webhook] Sent {event_type} → {settings.outbound_webhook_url} ({resp.status_code})")
+        print(f"[webhook] Sent {event_type} → {settings.outbound_webhook_url} "
+              f"({resp.status_code})")
     except Exception as e:
-        print(f"[webhook] Error sending {event_type} → {settings.outbound_webhook_url}: {e}")
+        print(f"[webhook] Error sending {event_type} → "
+              f"{settings.outbound_webhook_url}: {e}")
 
 
-# -----------------------
+# --------------------------------------------------------------------
+# Auth routes
+# --------------------------------------------------------------------
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = (request.form.get("username") or "").strip()
+        password = request.form.get("password") or ""
+
+        user = User.query.filter_by(username=username).first()
+        if not user or not user.check_password(password):
+            flash("Invalid username or password", "danger")
+            return render_template("login.html")
+
+        session["user_id"] = user.id
+        next_url = request.args.get("next") or url_for("list_invoices")
+        return redirect(next_url)
+
+    return render_template("login.html")
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    flash("Logged out", "success")
+    return redirect(url_for("login"))
+
+
+# --------------------------------------------------------------------
 # Web UI routes
-# -----------------------
+# --------------------------------------------------------------------
 
 @app.route("/")
 @login_required
@@ -372,7 +398,7 @@ def index():
     return redirect(url_for("list_invoices"))
 
 
-# Settings
+# Settings ------------------------------------------------------------
 
 @app.route("/settings", methods=["GET", "POST"])
 @login_required
@@ -386,8 +412,12 @@ def settings_view():
             flash("Invalid tax rate", "danger")
             return redirect(url_for("settings_view"))
 
-        settings.outbound_webhook_enabled = bool(request.form.get("outbound_webhook_enabled"))
-        settings.outbound_webhook_url = (request.form.get("outbound_webhook_url") or "").strip() or None
+        settings.outbound_webhook_enabled = bool(
+            request.form.get("outbound_webhook_enabled")
+        )
+        settings.outbound_webhook_url = (
+            request.form.get("outbound_webhook_url") or ""
+        ).strip() or None
 
         db.session.commit()
         flash("Settings saved", "success")
@@ -395,7 +425,7 @@ def settings_view():
     return render_template("settings.html", settings=settings)
 
 
-# API Keys management
+# API keys ------------------------------------------------------------
 
 @app.route("/api-keys")
 @login_required
@@ -410,8 +440,16 @@ def api_keys_new():
     if request.method == "POST":
         name = (request.form.get("name") or "").strip()
         key_value = (request.form.get("key") or "").strip()
+        can_read = bool(request.form.get("can_read"))
+        can_write = bool(request.form.get("can_write"))
+
         if not name:
             flash("Name is required", "danger")
+            return render_template("api_key_form.html", api_key=None)
+
+        if not (can_read or can_write):
+            flash("At least one permission (read or write) must be selected.",
+                  "danger")
             return render_template("api_key_form.html", api_key=None)
 
         if not key_value:
@@ -421,7 +459,13 @@ def api_keys_new():
             flash("That key value is already in use, please try again.", "danger")
             return render_template("api_key_form.html", api_key=None)
 
-        api_key = APIKey(name=name, key=key_value, active=True)
+        api_key = APIKey(
+            name=name,
+            key=key_value,
+            can_read=can_read,
+            can_write=can_write,
+            active=True,
+        )
         db.session.add(api_key)
         db.session.commit()
 
@@ -457,83 +501,11 @@ def api_keys_delete(key_id):
 @app.route("/api/docs")
 @login_required
 def api_docs():
-    return render_template("api_docs.html")
+    example_key = APIKey.query.first()
+    return render_template("api_docs.html", example_key=example_key)
 
 
-# Products (web UI)
-
-@app.route("/products")
-@login_required
-def list_products():
-    products = Product.query.order_by(Product.name).all()
-    return render_template("products_list.html", products=products)
-
-
-@app.route("/products/new", methods=["GET", "POST"])
-@login_required
-def new_product():
-    if request.method == "POST":
-        name = (request.form.get("name") or "").strip()
-        if not name:
-            flash("Product name is required", "danger")
-            return render_template("product_form.html", product=None)
-
-        price_str = (request.form.get("unit_price") or "").strip()
-        try:
-            price = Decimal(price_str or "0")
-        except Exception:
-            flash("Invalid unit price", "danger")
-            return render_template("product_form.html", product=None)
-
-        product = Product(
-            name=name,
-            description=request.form.get("description"),
-            unit_price=price,
-        )
-        db.session.add(product)
-        db.session.commit()
-        flash("Product created", "success")
-        return redirect(url_for("list_products"))
-
-    return render_template("product_form.html", product=None)
-
-
-@app.route("/products/<int:product_id>/edit", methods=["GET", "POST"])
-@login_required
-def edit_product(product_id):
-    product = Product.query.get_or_404(product_id)
-    if request.method == "POST":
-        product.name = (request.form.get("name") or "").strip()
-        product.description = request.form.get("description")
-        price_str = (request.form.get("unit_price") or "").strip()
-        try:
-            product.unit_price = Decimal(price_str or "0")
-        except Exception:
-            flash("Invalid unit price", "danger")
-            return render_template("product_form.html", product=product)
-
-        if not product.name:
-            flash("Product name is required", "danger")
-            return render_template("product_form.html", product=product)
-
-        db.session.commit()
-        flash("Product updated", "success")
-        return redirect(url_for("list_products"))
-
-    return render_template("product_form.html", product=product)
-
-
-@app.route("/products/<int:product_id>/delete", methods=["POST"])
-@login_required
-def delete_product(product_id):
-    product = Product.query.get_or_404(product_id)
-    db.session.delete(product)
-    db.session.commit()
-    flash("Product deleted", "success")
-    return redirect(url_for("list_products"))
-
-
-# Customers
+# Customers -----------------------------------------------------------
 
 @app.route("/customers")
 @login_required
@@ -618,7 +590,92 @@ def edit_customer(customer_id):
     return render_template("customer_form.html", customer=customer)
 
 
-# Invoices
+# Products ------------------------------------------------------------
+
+@app.route("/products")
+@login_required
+def list_products():
+    products = Product.query.order_by(Product.name).all()
+    return render_template("products_list.html", products=products)
+
+
+@app.route("/products/new", methods=["GET", "POST"])
+@login_required
+def new_product():
+    if request.method == "POST":
+        name = (request.form.get("name") or "").strip()
+        description = (request.form.get("description") or "").strip()
+        price_str = (request.form.get("unit_price") or "").strip()
+        active = bool(request.form.get("active"))
+
+        if not name:
+            flash("Name is required", "danger")
+            return render_template("product_form.html", product=None)
+
+        try:
+            unit_price = Decimal(price_str or "0")
+        except Exception:
+            flash("Invalid unit price", "danger")
+            return render_template("product_form.html", product=None)
+
+        product = Product(
+            name=name,
+            description=description or None,
+            unit_price=unit_price,
+            active=active,
+        )
+        db.session.add(product)
+        db.session.commit()
+        flash("Product created", "success")
+        return redirect(url_for("list_products"))
+
+    return render_template("product_form.html", product=None)
+
+
+@app.route("/products/<int:product_id>/edit", methods=["GET", "POST"])
+@login_required
+def edit_product(product_id):
+    product = Product.query.get_or_404(product_id)
+
+    if request.method == "POST":
+        name = (request.form.get("name") or "").strip()
+        description = (request.form.get("description") or "").strip()
+        price_str = (request.form.get("unit_price") or "").strip()
+        active = bool(request.form.get("active"))
+
+        if not name:
+            flash("Name is required", "danger")
+            return render_template("product_form.html", product=product)
+
+        try:
+            unit_price = Decimal(price_str or "0")
+        except Exception:
+            flash("Invalid unit price", "danger")
+            return render_template("product_form.html", product=product)
+
+        product.name = name
+        product.description = description or None
+        product.unit_price = unit_price
+        product.active = active
+
+        db.session.commit()
+        flash("Product updated", "success")
+        return redirect(url_for("list_products"))
+
+    return render_template("product_form.html", product=product)
+
+
+@app.route("/products/<int:product_id>/toggle", methods=["POST"])
+@login_required
+def toggle_product(product_id):
+    product = Product.query.get_or_404(product_id)
+    product.active = not product.active
+    db.session.commit()
+    flash("Product status updated", "success")
+    return redirect(url_for("list_products"))
+
+
+# Invoices ------------------------------------------------------------
 
 @app.route("/invoices")
 @login_required
@@ -631,16 +688,15 @@ def list_invoices():
 @login_required
 def new_invoice():
     customers = Customer.query.order_by(Customer.name).all()
-    products = Product.query.order_by(Product.name).all()
-    settings = get_settings()
+    products = Product.query.filter_by(active=True).order_by(Product.name).all()
     if request.method == "POST":
-        return handle_invoice_form(customers, products, settings)
+        return handle_invoice_form(products)
     return render_template(
         "invoice_form.html",
         invoice=None,
         customers=customers,
         products=products,
-        settings=settings,
+        settings=get_settings(),
     )
 
 
@@ -649,21 +705,20 @@ def new_invoice():
 def edit_invoice(invoice_id):
     invoice = Invoice.query.get_or_404(invoice_id)
     customers = Customer.query.order_by(Customer.name).all()
-    products = Product.query.order_by(Product.name).all()
-    settings = get_settings()
+    products = Product.query.filter_by(active=True).order_by(Product.name).all()
 
     if request.method == "POST":
-        return handle_invoice_form(customers, products, settings, invoice=invoice)
+        return handle_invoice_form(products, invoice)
     return render_template(
         "invoice_form.html",
         invoice=invoice,
         customers=customers,
         products=products,
-        settings=settings,
+        settings=get_settings(),
     )
 
 
-def handle_invoice_form(customers, products, settings, invoice=None):
+def handle_invoice_form(products, invoice: Invoice | None = None):
     is_new = invoice is None
 
     customer_id = request.form.get("customer_id")
@@ -677,12 +732,13 @@ def handle_invoice_form(customers, products, settings, invoice=None):
         due_date = datetime.strptime(due_date_str, "%Y-%m-%d").date()
     except Exception:
         flash("Invalid dates", "danger")
+        customers = Customer.query.order_by(Customer.name).all()
         return render_template(
             "invoice_form.html",
             invoice=invoice,
             customers=customers,
             products=products,
-            settings=settings,
+            settings=get_settings(),
         )
 
     customer = Customer.query.get(int(customer_id)) if customer_id else None
@@ -707,14 +763,28 @@ def handle_invoice_form(customers, products, settings, invoice=None):
 
     invoice.tax_rate = determine_tax_rate_for_customer(customer)
 
+    product_ids = request.form.getlist("item_product_id")
     descriptions = request.form.getlist("item_description")
     quantities = request.form.getlist("item_quantity")
     unit_prices = request.form.getlist("item_unit_price")
 
-    for desc, qty_str, price_str in zip(descriptions, quantities, unit_prices):
+    for pid_str, desc, qty_str, price_str in zip(
+        product_ids, descriptions, quantities, unit_prices
+    ):
         desc = (desc or "").strip()
-        if not desc:
+        if not desc and not pid_str:
             continue
+
+        product_obj = None
+        if pid_str:
+            try:
+                product_obj = Product.query.get(int(pid_str))
+            except Exception:
+                product_obj = None
+
+        if product_obj and not desc:
+            desc = product_obj.name
+
         try:
             qty = Decimal(qty_str or "0")
             price = Decimal(price_str or "0")
@@ -724,6 +794,7 @@ def handle_invoice_form(customers, products, settings, invoice=None):
         line_total = qty * price
         item = InvoiceItem(
             invoice=invoice,
+            product=product_obj,
             description=desc,
             quantity=qty,
             unit_price=price,
@@ -794,7 +865,9 @@ def add_payment(invoice_id):
     return redirect(url_for("invoice_detail", invoice_id=invoice.id))
 
 
-# CSV Import
+# --------------------------------------------------------------------
+# CSV Import routes (unchanged from earlier behaviour)
+# --------------------------------------------------------------------
 
 @app.route("/import/customers", methods=["GET", "POST"])
 @login_required
@@ -955,7 +1028,6 @@ def import_invoices():
                 notes=notes,
             )
             invoice.tax_rate = determine_tax_rate_for_customer(customer)
-
             db.session.add(invoice)
             db.session.flush()
 
@@ -985,106 +1057,18 @@ def import_invoices():
             continue
 
     db.session.commit()
-
-    flash(f"Imported {count} invoices. {errors} rows skipped due to errors.", "success")
+    flash(f"Imported {count} invoices. {errors} rows skipped due to errors.",
+          "success")
     return redirect(url_for("list_invoices"))
 
 
-# -----------------------
-# API endpoints
-# -----------------------
-
-# Products API
-
-@app.route("/api/products", methods=["GET", "POST"])
-def api_products():
-    require_api_key()
-
-    if request.method == "GET":
-        products = Product.query.order_by(Product.name).all()
-        return jsonify([
-            {
-                "id": p.id,
-                "name": p.name,
-                "description": p.description,
-                "unit_price": float(p.unit_price),
-            }
-            for p in products
-        ])
-
-    # POST – create product
-    data = request.get_json(force=True)
-    name = (data.get("name") or "").strip()
-    if not name:
-        return jsonify({"error": "name is required"}), 400
-
-    try:
-        price = Decimal(str(data.get("unit_price", "0")))
-    except Exception:
-        return jsonify({"error": "invalid unit_price"}), 400
-
-    product = Product(
-        name=name,
-        description=data.get("description"),
-        unit_price=price,
-    )
-    db.session.add(product)
-    db.session.commit()
-    return jsonify({
-        "id": product.id,
-        "name": product.name,
-        "description": product.description,
-        "unit_price": float(product.unit_price),
-    }), 201
-
-
-@app.route("/api/products/<int:product_id>", methods=["GET", "PUT", "DELETE"])
-def api_product_detail(product_id):
-    require_api_key()
-    product = Product.query.get_or_404(product_id)
-
-    if request.method == "GET":
-        return jsonify({
-            "id": product.id,
-            "name": product.name,
-            "description": product.description,
-            "unit_price": float(product.unit_price),
-        })
-
-    if request.method == "DELETE":
-        db.session.delete(product)
-        db.session.commit()
-        return jsonify({"status": "deleted"})
-
-    # PUT – update
-    data = request.get_json(force=True)
-    if "name" in data:
-        product.name = (data.get("name") or "").strip()
-    if "description" in data:
-        product.description = data.get("description")
-    if "unit_price" in data:
-        try:
-            product.unit_price = Decimal(str(data.get("unit_price", "0")))
-        except Exception:
-            return jsonify({"error": "invalid unit_price"}), 400
-
-    if not product.name:
-        return jsonify({"error": "name cannot be empty"}), 400
-
-    db.session.commit()
-    return jsonify({
-        "id": product.id,
-        "name": product.name,
-        "description": product.description,
-        "unit_price": float(product.unit_price),
-    })
-
-
-# Invoices API
+# --------------------------------------------------------------------
+# Public API endpoints (require API key)
+# --------------------------------------------------------------------
 
 @app.route("/api/invoices", methods=["POST"])
 def api_create_invoice():
-    require_api_key()
+    require_api_key(permission="write")
     data = request.get_json(force=True)
 
     customer_id = data.get("customer_id")
@@ -1177,14 +1161,14 @@ def api_create_invoice():
 
 @app.route("/api/invoices/<int:invoice_id>", methods=["GET"])
 def api_get_invoice(invoice_id):
-    require_api_key()
+    require_api_key(permission="read")
     invoice = Invoice.query.get_or_404(invoice_id)
     return jsonify(invoice.to_dict())
 
 
 @app.route("/api/invoices/<int:invoice_id>", methods=["PUT"])
 def api_update_invoice(invoice_id):
-    require_api_key()
+    require_api_key(permission="write")
     invoice = Invoice.query.get_or_404(invoice_id)
     data = request.get_json(force=True)
 
@@ -1255,7 +1239,7 @@ def api_update_invoice(invoice_id):
 
 @app.route("/api/webhooks/payment", methods=["POST"])
 def api_webhook_payment():
-    require_api_key()
+    require_api_key(permission="write")
     data = request.get_json(force=True)
 
     invoice_number = data.get("invoice_number")
@@ -1290,25 +1274,38 @@ def api_webhook_payment():
     }), 201
 
 
-# -----------------------
+# --------------------------------------------------------------------
 # CLI helper
-# -----------------------
+# --------------------------------------------------------------------
 
 @app.cli.command("init-db")
 def init_db_command():
-    """Create tables and seed default settings + API key."""
     db.create_all()
+
     if not Settings.query.get(1):
         db.session.add(Settings(id=1, default_tax_rate=Decimal("0.00")))
+
     if not APIKey.query.first():
         default_key_value = generate_api_key_value()
-        api_key = APIKey(name="Default key", key=default_key_value, active=True)
+        api_key = APIKey(
+            name="Default key",
+            key=default_key_value,
+            can_read=True,
+            can_write=True,
+            active=True,
+        )
         db.session.add(api_key)
         print("Created default API key:", default_key_value)
+
+    if not User.query.filter_by(username="admin").first():
+        admin = User(username="admin", is_admin=True)
+        admin.set_password("admin123")  # NOTE: does NOT override existing admin
+        db.session.add(admin)
+        print("Created default admin user: admin / admin123")
+
     db.session.commit()
     print("DB initialized")
 
 
 if __name__ == "__main__":
-    # In Docker we run via gunicorn; this is just for local dev
     app.run(debug=True, host="0.0.0.0", port=5000)
