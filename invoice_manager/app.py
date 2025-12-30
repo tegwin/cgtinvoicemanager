@@ -434,8 +434,13 @@ def logout():
 @login_required
 def settings_view():
     settings = get_settings()
+
     if request.method == "POST":
-        # Default tax rate
+        # ----- General / branding -----
+        settings.brand_name = (request.form.get("brand_name") or "").strip() or None
+        settings.logo_url = (request.form.get("logo_url") or "").strip() or None
+
+        # ----- Tax -----
         rate_str = (request.form.get("default_tax_rate") or "").strip()
         try:
             settings.default_tax_rate = Decimal(rate_str or "0")
@@ -443,32 +448,43 @@ def settings_view():
             flash("Invalid tax rate", "danger")
             return redirect(url_for("settings_view"))
 
-        # Outbound webhook config
-        settings.outbound_webhook_enabled = bool(request.form.get("outbound_webhook_enabled"))
-        settings.outbound_webhook_url = (request.form.get("outbound_webhook_url") or "").strip() or None
+        # ----- Payment terms -----
+        use_global = bool(request.form.get("use_global_payment_terms"))
+        settings.use_global_payment_terms = use_global
 
-        selected_events = request.form.getlist("outbound_webhook_events")
-        settings.outbound_webhook_events = ",".join(selected_events) if selected_events else None
+        days_str = (request.form.get("payment_terms_days") or "").strip()
+        try:
+            days_val = int(days_str or "0")
+            if days_val < 0:
+                days_val = 0
+            settings.payment_terms_days = days_val
+        except Exception:
+            settings.payment_terms_days = 0
 
-        # Branding
-        settings.brand_name = (request.form.get("brand_name") or "").strip() or None
-        settings.logo_url = (request.form.get("logo_url") or "").strip() or None
+        # ----- Webhook config -----
+        settings.outbound_webhook_enabled = bool(
+            request.form.get("outbound_webhook_enabled")
+        )
+        settings.outbound_webhook_url = (
+            request.form.get("outbound_webhook_url") or ""
+        ).strip() or None
 
-        # Global payment terms
-        use_global_terms = bool(request.form.get("use_global_payment_terms"))
-        settings.use_global_payment_terms = use_global_terms
-        if use_global_terms:
-            try:
-                days = int(request.form.get("payment_terms_days") or "0")
-            except ValueError:
-                days = 0
-            settings.payment_terms_days = max(days, 0)
+        # Events: list of checkboxes -> comma-separated string or ""
+        events = request.form.getlist("outbound_webhook_events")
+        if events:
+            # normalise & join
+            cleaned = [e.strip() for e in events if e.strip()]
+            settings.outbound_webhook_events = ",".join(cleaned)
+        else:
+            # VERY IMPORTANT: never None, always a string
+            settings.outbound_webhook_events = ""
 
         db.session.commit()
         flash("Settings saved", "success")
         return redirect(url_for("settings_view"))
 
     return render_template("settings.html", settings=settings)
+
 
 
 # -----------------------
