@@ -15,6 +15,10 @@
     <a href="{{ url_for('list_invoices') }}" class="btn btn-secondary btn-sm">
       Back to invoices
     </a>
+    <a href="{{ url_for('invoice_print', invoice_id=invoice.id) }}"
+   class="btn btn-outline-light btn-sm" target="_blank">
+  Print / PDF
+</a>
   </div>
 </div>
 

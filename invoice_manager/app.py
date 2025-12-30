@@ -106,6 +106,14 @@ class Product(db.Model):
         onupdate=datetime.utcnow, nullable=False
     )
 
+@app.route("/invoices/<int:invoice_id>/print")
+@login_required
+def invoice_print(invoice_id):
+    invoice = Invoice.query.get_or_404(invoice_id)
+    settings = get_settings()
+    return render_template("invoice_print.html", invoice=invoice, settings=settings)
+
+
 
 class Invoice(db.Model):
     __tablename__ = "invoices"
