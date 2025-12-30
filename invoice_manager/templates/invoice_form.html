@@ -36,7 +36,7 @@
             <input type="date"
                    name="issue_date"
                    class="form-control"
-                   value="{{ invoice.issue_date.isoformat() if invoice else '' }}"
+                   value="{% if invoice %}{{ invoice.issue_date }}{% endif %}"
                    required>
           </div>
           <div class="col-md-3">
@@ -44,16 +44,15 @@
             <input type="date"
                    name="due_date"
                    class="form-control"
-                   value="{{ invoice.due_date.isoformat() if invoice else '' }}"
-                   required>
+                   value="{% if invoice %}{{ invoice.due_date }}{% endif %}">
           </div>
         </div>
 
         <div class="row g-3 mb-3">
           <div class="col-md-4">
             <label class="form-label">Status</label>
-            {% set current_status = invoice.status if invoice else 'draft' %}
             <select name="status" class="form-select">
+              {% set current_status = invoice.status if invoice else 'draft' %}
               {% for s in ['draft','sent','paid','overdue','cancelled'] %}
                 <option value="{{ s }}" {% if current_status == s %}selected{% endif %}>
                   {{ s|capitalize }}
@@ -67,8 +66,8 @@
           </div>
         </div>
 
-        <input type="hidden"
-               id="tax-rate-input"
+        <!-- effective tax rate used for live totals -->
+        <input type="hidden" id="tax-rate-input"
                value="{{ (invoice.tax_rate if invoice and invoice.tax_rate is not none else settings.default_tax_rate) or 0 }}">
 
         <div class="mb-2 d-flex justify-content-between align-items-center">
@@ -91,20 +90,18 @@
               </tr>
             </thead>
             <tbody>
+            {# EDIT EXISTING INVOICE: keep rows & try to re-select product #}
             {% if invoice and invoice.items %}
               {% for item in invoice.items %}
-                {% set item_desc = item.description or '' %}
                 <tr class="item-row">
                   <td>
                     <select class="form-select product-select">
                       <option value="">Manual...</option>
                       {% for p in products %}
-                        {% set prod_desc = p.description or '' %}
-                        {% set prod_name = p.name or '' %}
                         <option value="{{ p.id }}"
-                                data-description="{{ (p.description or p.name or '')|e }}"
+                                data-description="{{ p.name|e }}"
                                 data-price="{{ p.unit_price }}"
-                                {% if (item_desc == prod_desc or item_desc == prod_name) and item.unit_price == p.unit_price %}selected{% endif %}>
+                                {% if item.description == p.name %}selected{% endif %}>
                           {{ p.name }}
                         </option>
                       {% endfor %}
@@ -142,6 +139,7 @@
                   </td>
                 </tr>
               {% endfor %}
+            {# NEW INVOICE: one blank row #}
             {% else %}
               <tr class="item-row">
                 <td>
@@ -149,7 +147,7 @@
                     <option value="">Manual...</option>
                     {% for p in products %}
                       <option value="{{ p.id }}"
-                              data-description="{{ (p.description or p.name or '')|e }}"
+                              data-description="{{ p.name|e }}"
                               data-price="{{ p.unit_price }}">
                         {{ p.name }}
                       </option>
@@ -222,7 +220,7 @@
         <span class="fw-bold fs-5" id="summary-total">0.00</span>
       </div>
       <div class="text-muted small">
-        Totals are indicative based on the current customer tax settings and line items.
+        Totals are based on current customer tax settings and line items.
       </div>
     </div>
   </div>
@@ -293,7 +291,9 @@
         const desc = selected.getAttribute("data-description") || "";
         const price = selected.getAttribute("data-price") || "";
 
-        if (desc && descInput.value.trim() === "") {
+        // IMPORTANT: store the product NAME in description
+        // so we can re-select the product on edit.
+        if (desc) {
           descInput.value = desc;
         }
         if (price) {
@@ -304,8 +304,10 @@
     }
   }
 
+  // Bind events for existing rows
   document.querySelectorAll("#items-table tbody tr.item-row").forEach(bindRowEvents);
 
+  // Add-row button
   document.getElementById("add-line-btn").addEventListener("click", () => {
     const tbody = document.querySelector("#items-table tbody");
     const row = document.createElement("tr");
@@ -316,7 +318,7 @@
           <option value="">Manual...</option>
           {% for p in products %}
           <option value="{{ p.id }}"
-                  data-description="{{ (p.description or p.name or '')|e }}"
+                  data-description="{{ p.name|e }}"
                   data-price="{{ p.unit_price }}">
             {{ p.name }}
           </option>
@@ -348,6 +350,7 @@
     recalcTotals();
   });
 
+  // Update tax rate when customer changes
   const customerSelect = document.getElementById("customer-select");
   const taxRateInput = document.getElementById("tax-rate-input");
   if (customerSelect && taxRateInput) {
@@ -359,6 +362,7 @@
     });
   }
 
+  // Initial totals
   recalcTotals();
 })();
 </script>
