@@ -1,26 +1,32 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <div>
-    <h2 class="mb-0">
-      {% if invoice %}Edit Invoice{% else %}New Invoice{% endif %}
-    </h2>
-    <div class="text-muted small">
-      Choose a customer, add product lines, and review totals in real time.
+<div class="page-header mb-4">
+  <div class="d-flex justify-content-between align-items-center">
+    <div>
+      <h1 class="page-title mb-1">
+        {% if invoice %}Edit Invoice{% else %}New Invoice{% endif %}
+      </h1>
+      <div class="text-muted small">
+        Choose a customer, add product lines, and review totals in real time.
+      </div>
     </div>
   </div>
 </div>
 
 <div class="row g-4">
+  <!-- Main form -->
   <div class="col-lg-8">
-    <div class="card-dark p-3 p-md-4 mb-3">
+    <div class="card-dark p-3 p-md-4">
       <form method="post" id="invoice-form">
         <div class="row g-3 mb-3">
           <div class="col-md-6">
             <label class="form-label">Customer</label>
-            <select name="customer_id" class="form-select" id="customer-select" required>
-              <option value="">Select customer...</option>
+            <select name="customer_id"
+                    class="form-select form-control-dark"
+                    id="customer-select"
+                    required>
+              <option value="">Select customer…</option>
               {% for c in customers %}
                 {% set effective_tax = (c.tax_rate if not c.use_default_tax and c.tax_rate is not none else settings.default_tax_rate) %}
                 <option value="{{ c.id }}"
@@ -35,7 +41,7 @@
             <label class="form-label">Issue date</label>
             <input type="date"
                    name="issue_date"
-                   class="form-control"
+                   class="form-control form-control-dark"
                    value="{% if invoice %}{{ invoice.issue_date }}{% endif %}"
                    required>
           </div>
@@ -43,16 +49,16 @@
             <label class="form-label">Due date</label>
             <input type="date"
                    name="due_date"
-                   class="form-control"
-                   value="{% if invoice %}{{ invoice.due_date }}{% endif %}">
+                   class="form-control form-control-dark"
+                   value="{% if invoice and invoice.due_date %}{{ invoice.due_date }}{% endif %}">
           </div>
         </div>
 
-        <div class="row g-3 mb-3">
+        <div class="row g-3 mb-4">
           <div class="col-md-4">
             <label class="form-label">Status</label>
-            <select name="status" class="form-select">
-              {% set current_status = invoice.status if invoice else 'draft' %}
+            {% set current_status = invoice.status if invoice else 'draft' %}
+            <select name="status" class="form-select form-control-dark">
               {% for s in ['draft','sent','paid','overdue','cancelled'] %}
                 <option value="{{ s }}" {% if current_status == s %}selected{% endif %}>
                   {{ s|capitalize }}
@@ -62,18 +68,23 @@
           </div>
           <div class="col-md-8">
             <label class="form-label">Notes</label>
-            <textarea name="notes" class="form-control" rows="2">{{ invoice.notes if invoice else '' }}</textarea>
+            <textarea name="notes"
+                      class="form-control form-control-dark"
+                      rows="2">{{ invoice.notes if invoice and invoice.notes else '' }}</textarea>
           </div>
         </div>
 
+        <!-- effective tax rate used for live totals -->
         <input type="hidden"
                id="tax-rate-input"
                value="{{ (invoice.tax_rate if invoice and invoice.tax_rate is not none else settings.default_tax_rate) or 0 }}">
 
-        <div class="mb-2 d-flex justify-content-between align-items-center">
+        <div class="d-flex justify-content-between align-items-center mb-2">
           <h5 class="mb-0">Line items</h5>
-          <button type="button" class="btn btn-sm btn-outline-light" id="add-line-btn">
-            <i class="fa-solid fa-plus me-1"></i> Add line
+          <button type="button"
+                  class="btn btn-sm btn-outline-light"
+                  id="add-line-btn">
+            + Add line
           </button>
         </div>
 
@@ -81,69 +92,77 @@
           <table class="table table-dark align-middle mb-0" id="items-table">
             <thead>
               <tr>
-                <th style="width: 25%;">Product/Service</th>
-                <th style="width: 30%;">Description</th>
-                <th style="width: 12%;">Qty</th>
-                <th style="width: 15%;">Unit price</th>
-                <th style="width: 15%;">Line total</th>
-                <th style="width: 3%;"></th>
+                <th style="width: 24%;">Product/Service</th>
+                <th style="width: 32%;">Description</th>
+                <th style="width: 10%;">Qty</th>
+                <th style="width: 14%;">Unit price</th>
+                <th style="width: 14%;">Line total</th>
+                <th style="width: 6%;"></th>
               </tr>
             </thead>
             <tbody>
+            {# Existing items when editing #}
             {% if invoice and invoice.items %}
               {% for item in invoice.items %}
-                <tr class="item-row">
-                  <td>
-                    <select class="form-select product-select" name="item_product_id">
-                      <option value="">Manual...</option>
-                      {% for p in products %}
-                        <option value="{{ p.id }}"
-                                data-description="{{ (p.description or '')|e }}"
-                                data-price="{{ p.unit_price }}"
-                                {% if item.product_id == p.id %}selected{% endif %}>
-                          {{ p.name }}
-                        </option>
-                      {% endfor %}
-                    </select>
-                  </td>
-                  <td>
-                    <input type="text"
-                           name="item_description"
-                           class="form-control"
-                           value="{{ item.description }}">
-                  </td>
-                  <td>
-                    <input type="number"
-                           step="0.01"
-                           min="0"
-                           name="item_quantity"
-                           class="form-control text-end"
-                           value="{{ item.quantity }}">
-                  </td>
-                  <td>
-                    <input type="number"
-                           step="0.01"
-                           min="0"
-                           name="item_unit_price"
-                           class="form-control text-end"
-                           value="{{ item.unit_price }}">
-                  </td>
-                  <td class="text-end">
-                    <span class="line-total">{{ item.line_total }}</span>
-                  </td>
-                  <td class="text-center">
-                    <button type="button" class="btn btn-sm btn-outline-danger remove-line-btn"
-                            title="Remove line">
-                      &times;
-                    </button>
-                  </td>
-                </tr>
-              {% endfor %}
-            {% else %}
               <tr class="item-row">
                 <td>
-                  <select class="form-select product-select" name="item_product_id">
-                    <option value="">Manual...</option>
+                  <select name="item_product_id"
+                          class="form-select form-control-dark product-select">
+                    <option value=""
+                            {% if not item.product_id %}selected{% endif %}>
+                      Manual…
+                    </option>
+                    {% for p in products %}
+                      <option value="{{ p.id }}"
+                              data-description="{{ (p.description or '')|e }}"
+                              data-price="{{ p.unit_price }}"
+                              {% if item.product_id == p.id %}selected{% endif %}>
+                        {{ p.name }}
+                      </option>
+                    {% endfor %}
+                  </select>
+                </td>
+                <td>
+                  <input type="text"
+                         name="item_description"
+                         class="form-control form-control-dark"
+                         value="{{ item.description }}">
+                </td>
+                <td>
+                  <input type="number"
+                         step="0.01"
+                         min="0"
+                         name="item_quantity"
+                         class="form-control form-control-dark text-end"
+                         value="{{ item.quantity }}">
+                </td>
+                <td>
+                  <input type="number"
+                         step="0.01"
+                         min="0"
+                         name="item_unit_price"
+                         class="form-control form-control-dark text-end"
+                         value="{{ item.unit_price }}">
+                </td>
+                <td class="text-end">
+                  <span class="line-total">{{ '%.2f'|format(item.line_total) }}</span>
+                </td>
+                <td class="text-end">
+                  <button type="button"
+                          class="btn btn-sm btn-outline-danger remove-line-btn"
+                          title="Remove line">
+                    ×
+                  </button>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              {# Blank starter row for new invoice #}
+              <tr class="item-row">
+                <td>
+                  <select name="item_product_id"
+                          class="form-select form-control-dark product-select">
+                    <option value="" selected>Manual…</option>
                     {% for p in products %}
                       <option value="{{ p.id }}"
                               data-description="{{ (p.description or '')|e }}"
@@ -154,14 +173,16 @@
                   </select>
                 </td>
                 <td>
-                  <input type="text" name="item_description" class="form-control">
+                  <input type="text"
+                         name="item_description"
+                         class="form-control form-control-dark">
                 </td>
                 <td>
                   <input type="number"
                          step="0.01"
                          min="0"
                          name="item_quantity"
-                         class="form-control text-end"
+                         class="form-control form-control-dark text-end"
                          value="1">
                 </td>
                 <td>
@@ -169,16 +190,17 @@
                          step="0.01"
                          min="0"
                          name="item_unit_price"
-                         class="form-control text-end"
+                         class="form-control form-control-dark text-end"
                          value="0.00">
                 </td>
                 <td class="text-end">
                   <span class="line-total">0.00</span>
                 </td>
-                <td class="text-center">
-                  <button type="button" class="btn btn-sm btn-outline-danger remove-line-btn"
+                <td class="text-end">
+                  <button type="button"
+                          class="btn btn-sm btn-outline-danger remove-line-btn"
                           title="Remove line">
-                    &times;
+                    ×
                   </button>
                 </td>
               </tr>
@@ -188,10 +210,12 @@
         </div>
 
         <div class="mt-3 d-flex justify-content-between">
-          <a href="{{ url_for('list_invoices') }}" class="btn btn-outline-light">
+          <a href="{{ url_for('list_invoices') }}"
+             class="btn btn-outline-light">
             Cancel
           </a>
-          <button type="submit" class="btn btn-primary">
+          <button type="submit"
+                  class="btn btn-primary">
             Save invoice
           </button>
         </div>
@@ -199,6 +223,7 @@
     </div>
   </div>
 
+  <!-- Totals panel -->
   <div class="col-lg-4">
     <div class="card-dark p-3 p-md-4">
       <h5 class="mb-3">Totals</h5>
@@ -208,11 +233,13 @@
       </div>
       <div class="d-flex justify-content-between mb-2">
         <span class="text-muted">
-          VAT (<span id="summary-tax-rate">{{ (invoice.tax_rate if invoice and invoice.tax_rate is not none else settings.default_tax_rate) or 0 }}</span>%)
+          VAT (<span id="summary-tax-rate">
+            {{ (invoice.tax_rate if invoice and invoice.tax_rate is not none else settings.default_tax_rate) or 0 }}
+          </span>%)
         </span>
         <span id="summary-tax">0.00</span>
       </div>
-      <hr class="my-2" style="border-color: rgba(255,255,255,0.1);">
+      <hr class="my-2" style="border-color: rgba(255,255,255,0.08);">
       <div class="d-flex justify-content-between align-items-center mb-1">
         <span class="fw-semibold">Total</span>
         <span class="fw-bold fs-5" id="summary-total">0.00</span>
@@ -227,27 +254,31 @@
 
 {% block scripts %}
 <script>
-(function() {
+(function () {
   function recalcTotals() {
     let subtotal = 0;
-    document.querySelectorAll("#items-table tbody tr.item-row").forEach(row => {
-      const qtyInput = row.querySelector('input[name="item_quantity"]');
-      const priceInput = row.querySelector('input[name="item_unit_price"]');
-      const lineSpan = row.querySelector(".line-total");
 
-      const qty = parseFloat(qtyInput.value || "0") || 0;
-      const price = parseFloat(priceInput.value || "0") || 0;
-      const line = qty * price;
-      subtotal += line;
+    document
+      .querySelectorAll("#items-table tbody tr.item-row")
+      .forEach(function (row) {
+        const qtyInput = row.querySelector('input[name="item_quantity"]');
+        const priceInput = row.querySelector('input[name="item_unit_price"]');
+        const lineSpan = row.querySelector(".line-total");
 
-      if (lineSpan) {
-        lineSpan.textContent = line.toFixed(2);
-      }
-    });
+        const qty = parseFloat(qtyInput.value || "0") || 0;
+        const price = parseFloat(priceInput.value || "0") || 0;
+        const line = qty * price;
+        subtotal += line;
+
+        if (lineSpan) {
+          lineSpan.textContent = line.toFixed(2);
+        }
+      });
 
     const taxRateInput = document.getElementById("tax-rate-input");
     const taxRateSpan = document.getElementById("summary-tax-rate");
-    let taxRate = parseFloat(taxRateInput.value || "0") || 0;
+    const taxRate = parseFloat(taxRateInput.value || "0") || 0;
+
     const tax = subtotal * taxRate / 100.0;
     const total = subtotal + tax;
 
@@ -255,7 +286,7 @@
     document.getElementById("summary-tax").textContent = tax.toFixed(2);
     document.getElementById("summary-total").textContent = total.toFixed(2);
     if (taxRateSpan) {
-      taxRateSpan.textContent = taxRate.toFixed(2).replace(/\.00$/, '');
+      taxRateSpan.textContent = taxRate.toFixed(2).replace(/\.00$/, "");
     }
   }
 
@@ -265,13 +296,15 @@
     const removeBtn = row.querySelector(".remove-line-btn");
     const productSelect = row.querySelector(".product-select");
 
-    [qtyInput, priceInput].forEach(input => {
-      if (!input) return;
-      input.addEventListener("input", recalcTotals);
-    });
+    if (qtyInput) {
+      qtyInput.addEventListener("input", recalcTotals);
+    }
+    if (priceInput) {
+      priceInput.addEventListener("input", recalcTotals);
+    }
 
     if (removeBtn) {
-      removeBtn.addEventListener("click", () => {
+      removeBtn.addEventListener("click", function () {
         const rows = document.querySelectorAll("#items-table tbody tr.item-row");
         if (rows.length > 1) {
           row.remove();
@@ -281,17 +314,18 @@
     }
 
     if (productSelect) {
-      productSelect.addEventListener("change", () => {
-        const selected = productSelect.options[productSelect.selectedIndex];
+      productSelect.addEventListener("change", function () {
+        const opt = productSelect.options[productSelect.selectedIndex];
         const descInput = row.querySelector('input[name="item_description"]');
         const priceInput = row.querySelector('input[name="item_unit_price"]');
-        const desc = selected.getAttribute("data-description") || "";
-        const price = selected.getAttribute("data-price") || "";
 
-        if (desc && descInput.value.trim() === "") {
+        const desc = opt.getAttribute("data-description") || "";
+        const price = opt.getAttribute("data-price") || "";
+
+        if (desc && descInput && descInput.value.trim() === "") {
           descInput.value = desc;
         }
-        if (price) {
+        if (price && priceInput) {
           priceInput.value = parseFloat(price).toFixed(2);
         }
         recalcTotals();
@@ -299,16 +333,19 @@
     }
   }
 
-  document.querySelectorAll("#items-table tbody tr.item-row").forEach(bindRowEvents);
+  document
+    .querySelectorAll("#items-table tbody tr.item-row")
+    .forEach(bindRowEvents);
 
-  document.getElementById("add-line-btn").addEventListener("click", () => {
+  document.getElementById("add-line-btn").addEventListener("click", function () {
     const tbody = document.querySelector("#items-table tbody");
     const row = document.createElement("tr");
     row.classList.add("item-row");
     row.innerHTML = `
       <td>
-        <select class="form-select product-select" name="item_product_id">
-          <option value="">Manual...</option>
+        <select name="item_product_id"
+                class="form-select form-control-dark product-select">
+          <option value="" selected>Manual…</option>
           {% for p in products %}
           <option value="{{ p.id }}"
                   data-description="{{ (p.description or '')|e }}"
@@ -319,23 +356,34 @@
         </select>
       </td>
       <td>
-        <input type="text" name="item_description" class="form-control">
+        <input type="text"
+               name="item_description"
+               class="form-control form-control-dark">
       </td>
       <td>
-        <input type="number" step="0.01" min="0" name="item_quantity"
-               class="form-control text-end" value="1">
+        <input type="number"
+               step="0.01"
+               min="0"
+               name="item_quantity"
+               class="form-control form-control-dark text-end"
+               value="1">
       </td>
       <td>
-        <input type="number" step="0.01" min="0" name="item_unit_price"
-               class="form-control text-end" value="0.00">
+        <input type="number"
+               step="0.01"
+               min="0"
+               name="item_unit_price"
+               class="form-control form-control-dark text-end"
+               value="0.00">
       </td>
       <td class="text-end">
         <span class="line-total">0.00</span>
       </td>
-      <td class="text-center">
-        <button type="button" class="btn btn-sm btn-outline-danger remove-line-btn"
+      <td class="text-end">
+        <button type="button"
+                class="btn btn-sm btn-outline-danger remove-line-btn"
                 title="Remove line">
-          &times;
+          ×
         </button>
       </td>
     `;
@@ -347,7 +395,7 @@
   const customerSelect = document.getElementById("customer-select");
   const taxRateInput = document.getElementById("tax-rate-input");
   if (customerSelect && taxRateInput) {
-    customerSelect.addEventListener("change", () => {
+    customerSelect.addEventListener("change", function () {
       const opt = customerSelect.options[customerSelect.selectedIndex];
       const rate = opt.getAttribute("data-tax-rate") || "0";
       taxRateInput.value = rate;
