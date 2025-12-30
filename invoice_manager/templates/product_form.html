@@ -2,67 +2,52 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-  <div>
-    <h2 class="mb-0">
-      {% if product %}Edit Product{% else %}New Product{% endif %}
-    </h2>
-    <div class="text-muted small">
-      Define reusable products or services for your invoices.
-    </div>
-  </div>
+  <h2 class="mb-0">
+    {% if product %}Edit product{% else %}New product{% endif %}
+  </h2>
 </div>
 
 <div class="card-dark p-3 p-md-4">
   <form method="post">
-    <div class="row g-3">
+    <div class="row g-3 mb-3">
       <div class="col-md-6">
         <label class="form-label">Name</label>
         <input type="text" name="name" class="form-control"
                value="{{ product.name if product else '' }}" required>
       </div>
       <div class="col-md-3">
-        <label class="form-label">SKU</label>
-        <input type="text" name="sku" class="form-control"
-               value="{{ product.sku if product else '' }}">
-      </div>
-      <div class="col-md-3">
-        <label class="form-label">Type</label>
-        {% set t = product.type if product else 'service' %}
-        <select name="type" class="form-select">
-          <option value="product" {% if t == 'product' %}selected{% endif %}>Product</option>
-          <option value="service" {% if t == 'service' %}selected{% endif %}>Service</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="row g-3 mt-1">
-      <div class="col-md-3">
         <label class="form-label">Unit price</label>
         <input type="number" step="0.01" min="0" name="unit_price"
                class="form-control text-end"
-               value="{{ product.unit_price if product else '0.00' }}" required>
+               value="{{ product.unit_price if product else '0.00' }}">
       </div>
       <div class="col-md-3 d-flex align-items-end">
-        <div class="form-check mt-3">
-          <input class="form-check-input" type="checkbox" name="active" id="active"
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" value="1" id="active"
+                 name="active"
                  {% if not product or product.active %}checked{% endif %}>
           <label class="form-check-label" for="active">
             Active
           </label>
         </div>
       </div>
-      <div class="col-md-6">
-        <label class="form-label">Description</label>
-        <textarea name="description" rows="2" class="form-control">{{ product.description if product else '' }}</textarea>
-      </div>
     </div>
 
-    <div class="mt-4 d-flex justify-content-between">
-      <a href="{{ url_for('list_products') }}" class="btn btn-outline-light">Cancel</a>
+    <div class="mb-3">
+      <label class="form-label">Description</label>
+      <textarea name="description" rows="3"
+                class="form-control">{{ product.description if product else '' }}</textarea>
+    </div>
+
+    <div class="d-flex justify-content-between">
+      <a href="{{ url_for('list_products') }}" class="btn btn-outline-light">
+        Cancel
+      </a>
       <button type="submit" class="btn btn-primary">
-        {% if product %}Save changes{% else %}Create product{% endif %}
+        Save
       </button>
     </div>
   </form>
 </div>
 {% endblock %}
+
