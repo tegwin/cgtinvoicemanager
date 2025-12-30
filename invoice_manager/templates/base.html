@@ -2,188 +2,346 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Invoice Manager</title>
+  <title>{% block title %}Invoice Manager{% endblock %}</title>
+
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
+  <!-- Bootstrap 5 -->
   <link
     href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-    rel="stylesheet">
+    rel="stylesheet"
+    integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
+    crossorigin="anonymous">
+
+  <!-- Font Awesome (for icons) -->
   <link
     rel="stylesheet"
-    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+    referrerpolicy="no-referrer" />
 
   <style>
+    :root {
+      --bg-body: #050816;
+      --bg-sidebar: #0b1220;
+      --bg-main: #020617;
+      --bg-card: #111827;
+      --accent: #f97316;     /* warm orange, not blue */
+      --accent-soft: rgba(249, 115, 22, 0.1);
+      --border-subtle: rgba(148, 163, 184, 0.25);
+      --text-main: #e5e7eb;
+      --text-muted: #9ca3af;
+    }
+
+    html, body {
+      height: 100%;
+    }
+
     body {
-      background: #050716;
-      color: #e4e7f5;
+      margin: 0;
+      background: radial-gradient(circle at top, #020617 0, #020617 40%, #000 100%);
+      color: var(--text-main);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
-    .navbar {
-      background: linear-gradient(90deg, #0b1024, #151b3a);
-      border-bottom: 1px solid rgba(255,255,255,0.04);
-    }
+
     .app-shell {
       display: flex;
       min-height: 100vh;
     }
-    .sidebar {
-      width: 230px;
-      background: radial-gradient(circle at top left, #11152d, #050716);
-      border-right: 1px solid rgba(255,255,255,0.04);
-      padding: 1rem 0.75rem;
+
+    .sidebar-dark {
+      width: 240px;
+      background: linear-gradient(180deg, #020617 0%, #020617 40%, #020617 70%, #020617 100%);
+      border-right: 1px solid rgba(15, 23, 42, 0.9);
+      padding: 1.25rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
     }
-    .sidebar .nav-link {
-      color: #c3c7f3;
-      border-radius: 999px;
-      padding: 0.45rem 0.85rem;
-      font-size: 0.9rem;
+
+    .sidebar-brand {
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 0.8rem;
+      color: var(--text-muted);
       display: flex;
       align-items: center;
-      gap: 0.6rem;
+      gap: 0.35rem;
     }
-    .sidebar .nav-link i {
-      width: 18px;
+
+    .sidebar-brand span {
+      color: var(--accent);
+    }
+
+    .sidebar-nav {
+      list-style: none;
+      padding: 0;
+      margin: 0.5rem 0 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .sidebar-nav a {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.65rem;
+      border-radius: 0.6rem;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease;
+    }
+
+    .sidebar-nav a i {
+      font-size: 0.9rem;
+      width: 1rem;
       text-align: center;
     }
-    .sidebar .nav-link.active,
-    .sidebar .nav-link:hover {
-      background: rgba(101, 116, 255, 0.18);
-      color: #ffffff;
+
+    .sidebar-nav a:hover {
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--text-main);
+      transform: translateX(1px);
     }
-    .main {
+
+    .sidebar-nav a.active {
+      background: var(--accent-soft);
+      color: #fed7aa;
+    }
+
+    .sidebar-footer {
+      margin-top: auto;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      opacity: 0.7;
+    }
+
+    .main-dark {
       flex: 1;
-      padding: 1.25rem 2rem;
+      display: flex;
+      flex-direction: column;
+      background: radial-gradient(circle at top left, #020617 0, #020617 45%, #000 100%);
     }
+
+    .topbar {
+      padding: 0.75rem 1.5rem;
+      border-bottom: 1px solid rgba(15, 23, 42, 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.75rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .topbar .user-pill {
+      border-radius: 999px;
+      padding: 0.25rem 0.8rem;
+      background: rgba(15, 23, 42, 0.9);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .content-wrapper {
+      padding: 1.5rem 1.75rem 2rem;
+    }
+
+    @media (max-width: 992px) {
+      .app-shell {
+        flex-direction: column;
+      }
+      .sidebar-dark {
+        width: 100%;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .sidebar-nav {
+        flex-direction: row;
+        flex-wrap: wrap;
+      }
+      .main-dark {
+        min-height: calc(100vh - 64px);
+      }
+    }
+
     .card-dark {
-      background: rgba(14, 20, 49, 0.95);
-      border-radius: 16px;
-      border: 1px solid rgba(255,255,255,0.04);
-      box-shadow: 0 18px 45px rgba(0,0,0,0.55);
+      border-radius: 1rem;
+      border: 1px solid var(--border-subtle);
+      background: radial-gradient(circle at top left, #111827 0, #020617 80%);
+      box-shadow: 0 18px 45px rgba(15, 23, 42, 0.9);
+      color: var(--text-main);
     }
-    .badge-soft {
-      background: rgba(101, 116, 255, 0.14);
-      color: #c3c7ff;
-      border-radius: 999px;
-      padding: 0.15rem 0.6rem;
-      font-size: 0.7rem;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-    }
-    .btn-primary {
-      background: #6574ff;
-      border-color: #6574ff;
-      border-radius: 999px;
-    }
-    .btn-primary:hover {
-      background: #7a86ff;
-      border-color: #7a86ff;
-    }
-    .form-control, .form-select {
-      background: rgba(6, 10, 32, 0.95);
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.05);
-      color: #e4e7f5;
-    }
-    .form-control:focus, .form-select:focus {
-      background: rgba(6, 10, 32, 1);
-      border-color: #6574ff;
-      box-shadow: 0 0 0 1px rgba(101,116,255,0.5);
-      color: #ffffff;
-    }
+
     .table-dark {
-      --bs-table-bg: rgba(6, 10, 32, 0.9);
-      --bs-table-striped-bg: rgba(18, 24, 63, 0.95);
-      --bs-table-border-color: rgba(255,255,255,0.03);
+      --bs-table-bg: rgba(15, 23, 42, 0.9);
+      --bs-table-striped-bg: rgba(31, 41, 55, 0.85);
+      --bs-table-hover-bg: rgba(55, 65, 81, 0.7);
+      color: var(--text-main);
+      border-color: rgba(31, 41, 55, 1);
     }
+
+    .form-control,
+    .form-select,
+    .form-control:focus,
+    .form-select:focus {
+      background-color: #020617;
+      border-color: rgba(148, 163, 184, 0.4);
+      color: var(--text-main);
+    }
+
+    .form-control::placeholder {
+      color: rgba(148, 163, 184, 0.7);
+    }
+
+    .btn-primary {
+      background-color: var(--accent);
+      border-color: var(--accent);
+      color: #111827;
+      font-weight: 500;
+    }
+
+    .btn-primary:hover {
+      background-color: #ea580c;
+      border-color: #ea580c;
+      color: #020617;
+    }
+
+    .btn-outline-light {
+      border-color: rgba(148, 163, 184, 0.7);
+      color: var(--text-main);
+    }
+
+    .btn-outline-light:hover {
+      background-color: rgba(148, 163, 184, 0.15);
+      border-color: rgba(148, 163, 184, 0.9);
+    }
+
+    .alert {
+      border-radius: 0.75rem;
+      border-width: 1px;
+      margin-bottom: 1rem;
+    }
+
+    .alert-success {
+      background-color: rgba(16, 185, 129, 0.08);
+      border-color: rgba(16, 185, 129, 0.4);
+      color: #bbf7d0;
+    }
+
+    .alert-danger,
+    .alert-error {
+      background-color: rgba(239, 68, 68, 0.08);
+      border-color: rgba(248, 113, 113, 0.4);
+      color: #fecaca;
+    }
+
+    .text-muted { color: var(--text-muted) !important; }
+
     a {
-      color: #9fa8ff;
+      color: #e5e7eb;
     }
+
     a:hover {
-      color: #c3c9ff;
+      color: #f97316;
     }
   </style>
+
+  {% block head %}{% endblock %}
 </head>
 <body>
-
-<nav class="navbar navbar-dark px-3">
-  <div class="d-flex align-items-center w-100">
-    <div class="d-flex align-items-center gap-2">
-      <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center"
-           style="width:32px;height:32px;">
-        <i class="fa-solid fa-file-invoice"></i>
-      </div>
-      <div>
-        <div class="fw-semibold">Invoice Manager</div>
-        <div class="badge-soft">Internal billing console</div>
-      </div>
-    </div>
-    <div class="ms-auto d-flex align-items-center gap-3">
-      {% if session.get('logged_in') %}
-        <span class="text-muted small d-none d-md-inline">
-          <i class="fa-regular fa-circle-user me-1"></i> Admin
-        </span>
-        <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-light">
-          <i class="fa-solid fa-right-from-bracket me-1"></i> Logout
-        </a>
-      {% else %}
-        <a href="{{ url_for('login') }}" class="btn btn-sm btn-outline-light">
-          <i class="fa-solid fa-right-to-bracket me-1"></i> Login
-        </a>
-      {% endif %}
-    </div>
-  </div>
-</nav>
-
 <div class="app-shell">
-  <aside class="sidebar">
-    <div class="mb-3 text-uppercase text-muted small ps-2">Navigation</div>
-    <nav class="nav flex-column">
-      <a class="nav-link {% if request.endpoint in ['list_invoices', 'invoice_detail', 'new_invoice', 'edit_invoice'] %}active{% endif %}"
-         href="{{ url_for('list_invoices') }}">
-        <i class="fa-solid fa-file-invoice"></i> Invoices
-      </a>
-      <a class="nav-link {% if request.endpoint in ['list_customers','new_customer','edit_customer'] %}active{% endif %}"
-         href="{{ url_for('list_customers') }}">
-        <i class="fa-regular fa-user"></i> Customers
-      </a>
-      <a class="nav-link {% if request.endpoint in ['list_products','new_product','edit_product'] %}active{% endif %}"
-         href="{{ url_for('list_products') }}">
-        <i class="fa-solid fa-box-open"></i> Products &amp; Services
-      </a>
-      <a class="nav-link {% if request.endpoint in ['import_customers','import_invoices','import_products'] %}active{% endif %}"
-         href="{{ url_for('import_customers') }}">
-        <i class="fa-solid fa-file-import"></i> Imports
-      </a>
-    </nav>
+  <aside class="sidebar-dark">
+    <div class="sidebar-brand">
+      <i class="fa-solid fa-receipt"></i>
+      <span>Invoice</span> Manager
+    </div>
 
-    <div class="mt-4 mb-2 text-uppercase text-muted small ps-2">Platform</div>
-    <nav class="nav flex-column">
-      <a class="nav-link {% if request.endpoint == 'settings_view' %}active{% endif %}"
-         href="{{ url_for('settings_view') }}">
-        <i class="fa-solid fa-gear"></i> Settings
-      </a>
-      <a class="nav-link {% if request.endpoint in ['api_keys_list','api_keys_new'] %}active{% endif %}"
-         href="{{ url_for('api_keys_list') }}">
-        <i class="fa-solid fa-key"></i> API Keys
-      </a>
-      <a class="nav-link {% if request.endpoint == 'api_docs' %}active{% endif %}"
-         href="{{ url_for('api_docs') }}">
-        <i class="fa-solid fa-code"></i> API &amp; Webhooks
-      </a>
-    </nav>
+    {% if session.get("user_logged_in") %}
+      <ul class="sidebar-nav">
+        <li>
+          <a href="{{ url_for('list_invoices') }}"
+             class="{% if request.endpoint in ['index','list_invoices','new_invoice','edit_invoice','invoice_detail'] %}active{% endif %}">
+            <i class="fa-solid fa-file-invoice"></i> Invoices
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('list_customers') }}"
+             class="{% if request.endpoint in ['list_customers','new_customer','edit_customer'] %}active{% endif %}">
+            <i class="fa-solid fa-users"></i> Customers
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('list_products') }}"
+             class="{% if request.endpoint in ['list_products','new_product','edit_product'] %}active{% endif %}">
+            <i class="fa-solid fa-box-open"></i> Products
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('import_customers') }}"
+             class="{% if request.endpoint == 'import_customers' %}active{% endif %}">
+            <i class="fa-solid fa-file-import"></i> Import Customers
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('import_invoices') }}"
+             class="{% if request.endpoint == 'import_invoices' %}active{% endif %}">
+            <i class="fa-solid fa-file-arrow-up"></i> Import Invoices
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('api_keys_list') }}"
+             class="{% if request.endpoint in ['api_keys_list','api_keys_new'] %}active{% endif %}">
+            <i class="fa-solid fa-key"></i> API Keys
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('api_docs') }}"
+             class="{% if request.endpoint == 'api_docs' %}active{% endif %}">
+            <i class="fa-solid fa-book"></i> API Docs
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('settings_view') }}"
+             class="{% if request.endpoint == 'settings_view' %}active{% endif %}">
+            <i class="fa-solid fa-gear"></i> Settings
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('logout') }}">
+            <i class="fa-solid fa-right-from-bracket"></i> Logout
+          </a>
+        </li>
+      </ul>
+    {% endif %}
+
+    <div class="sidebar-footer d-none d-md-block">
+      <div>CGT Invoice Manager</div>
+      <div class="text-muted">Self-hosted</div>
+    </div>
   </aside>
 
-  <main class="main">
-    <div class="container-fluid px-0">
+  <main class="main-dark">
+    <header class="topbar">
+      {% if session.get("user_logged_in") %}
+        <div class="user-pill">
+          <i class="fa-regular fa-circle-user"></i>
+          <span>{{ session.get("user_name", "admin") }}</span>
+        </div>
+      {% else %}
+        <span class="text-muted small">Please log in to access your invoices.</span>
+      {% endif %}
+    </header>
+
+    <div class="content-wrapper">
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-          <div class="mb-3">
-            {% for category, message in messages %}
-              <div class="alert alert-{{ category }} alert-dismissible fade show card-dark" role="alert">
-                {{ message }}
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
-              </div>
-            {% endfor %}
-          </div>
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
+          {% endfor %}
         {% endif %}
       {% endwith %}
 
@@ -192,7 +350,10 @@
   </main>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+        crossorigin="anonymous"></script>
+
 {% block scripts %}{% endblock %}
 </body>
 </html>

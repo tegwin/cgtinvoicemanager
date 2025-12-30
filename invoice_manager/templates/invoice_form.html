@@ -22,7 +22,7 @@
             <select name="customer_id" class="form-select" id="customer-select" required>
               <option value="">Select customer...</option>
               {% for c in customers %}
-                {% set effective_tax = (c.tax_rate if (not c.use_default_tax and c.tax_rate is not none) else settings.default_tax_rate) %}
+                {% set effective_tax = (c.tax_rate if not c.use_default_tax and c.tax_rate is not none else settings.default_tax_rate) %}
                 <option value="{{ c.id }}"
                         data-tax-rate="{{ effective_tax or 0 }}"
                         {% if invoice and invoice.customer_id == c.id %}selected{% endif %}>
@@ -36,7 +36,7 @@
             <input type="date"
                    name="issue_date"
                    class="form-control"
-                   value="{{ invoice.issue_date if invoice else '' }}"
+                   value="{{ invoice.issue_date.isoformat() if invoice else '' }}"
                    required>
           </div>
           <div class="col-md-3">
@@ -44,7 +44,7 @@
             <input type="date"
                    name="due_date"
                    class="form-control"
-                   value="{{ invoice.due_date if invoice else '' }}"
+                   value="{{ invoice.due_date.isoformat() if invoice else '' }}"
                    required>
           </div>
         </div>
@@ -52,8 +52,8 @@
         <div class="row g-3 mb-3">
           <div class="col-md-4">
             <label class="form-label">Status</label>
+            {% set current_status = invoice.status if invoice else 'draft' %}
             <select name="status" class="form-select">
-              {% set current_status = invoice.status if invoice else 'draft' %}
               {% for s in ['draft','sent','paid','overdue','cancelled'] %}
                 <option value="{{ s }}" {% if current_status == s %}selected{% endif %}>
                   {{ s|capitalize }}
@@ -99,29 +99,33 @@
                       <option value="">Manual...</option>
                       {% for p in products %}
                         <option value="{{ p.id }}"
-                                data-description="{{ p.description|e }}"
+                                data-description="{{ (p.description or '')|e }}"
                                 data-price="{{ p.unit_price }}"
-                                {% if item.product_id == p.id %}selected{% endif %}>
+                                {% if item.description == p.name and item.unit_price == p.unit_price %}selected{% endif %}>
                           {{ p.name }}
                         </option>
                       {% endfor %}
                     </select>
-                    <input type="hidden"
-                           name="item_product_id"
-                           class="product-id-input"
-                           value="{{ item.product_id or '' }}">
                   </td>
                   <td>
-                    <input type="text" name="item_description" class="form-control"
+                    <input type="text"
+                           name="item_description"
+                           class="form-control"
                            value="{{ item.description }}">
                   </td>
                   <td>
-                    <input type="number" step="0.01" min="0" name="item_quantity"
+                    <input type="number"
+                           step="0.01"
+                           min="0"
+                           name="item_quantity"
                            class="form-control text-end"
                            value="{{ item.quantity }}">
                   </td>
                   <td>
-                    <input type="number" step="0.01" min="0" name="item_unit_price"
+                    <input type="number"
+                           step="0.01"
+                           min="0"
+                           name="item_unit_price"
                            class="form-control text-end"
                            value="{{ item.unit_price }}">
                   </td>
@@ -142,27 +146,31 @@
                     <option value="">Manual...</option>
                     {% for p in products %}
                       <option value="{{ p.id }}"
-                              data-description="{{ p.description|e }}"
+                              data-description="{{ (p.description or '')|e }}"
                               data-price="{{ p.unit_price }}">
                         {{ p.name }}
                       </option>
                     {% endfor %}
                   </select>
-                  <input type="hidden"
-                         name="item_product_id"
-                         class="product-id-input"
-                         value="">
                 </td>
                 <td>
                   <input type="text" name="item_description" class="form-control">
                 </td>
                 <td>
-                  <input type="number" step="0.01" min="0" name="item_quantity"
-                         class="form-control text-end" value="1">
+                  <input type="number"
+                         step="0.01"
+                         min="0"
+                         name="item_quantity"
+                         class="form-control text-end"
+                         value="1">
                 </td>
                 <td>
-                  <input type="number" step="0.01" min="0" name="item_unit_price"
-                         class="form-control text-end" value="0.00">
+                  <input type="number"
+                         step="0.01"
+                         min="0"
+                         name="item_unit_price"
+                         class="form-control text-end"
+                         value="0.00">
                 </td>
                 <td class="text-end">
                   <span class="line-total">0.00</span>
@@ -247,6 +255,7 @@
     document.getElementById("summary-subtotal").textContent = subtotal.toFixed(2);
     document.getElementById("summary-tax").textContent = tax.toFixed(2);
     document.getElementById("summary-total").textContent = total.toFixed(2);
+
     if (taxRateSpan) {
       taxRateSpan.textContent = taxRate.toFixed(2).replace(/\.00$/, '');
     }
@@ -257,7 +266,6 @@
     const priceInput = row.querySelector('input[name="item_unit_price"]');
     const removeBtn = row.querySelector(".remove-line-btn");
     const productSelect = row.querySelector(".product-select");
-    const productIdInput = row.querySelector(".product-id-input");
 
     [qtyInput, priceInput].forEach(input => {
       if (!input) return;
@@ -288,11 +296,6 @@
         if (price) {
           priceInput.value = parseFloat(price).toFixed(2);
         }
-
-        if (productIdInput) {
-          productIdInput.value = selected.value || "";
-        }
-
         recalcTotals();
       });
     }
@@ -310,16 +313,12 @@
           <option value="">Manual...</option>
           {% for p in products %}
           <option value="{{ p.id }}"
-                  data-description="{{ p.description|e }}"
+                  data-description="{{ (p.description or '')|e }}"
                   data-price="{{ p.unit_price }}">
             {{ p.name }}
           </option>
           {% endfor %}
         </select>
-        <input type="hidden"
-               name="item_product_id"
-               class="product-id-input"
-               value="">
       </td>
       <td>
         <input type="text" name="item_description" class="form-control">
