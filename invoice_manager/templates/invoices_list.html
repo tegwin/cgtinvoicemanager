@@ -1,52 +1,76 @@
 {% extends "base.html" %}
+
 {% block content %}
-<div class="page-header">
-  <h1 class="page-title">📄 Invoices</h1>
-  <p class="page-subtitle">Track issued invoices, totals, and balances.</p>
+<div class="page-header mb-4 d-flex justify-content-between align-items-center">
+  <div>
+    <h2 class="mb-1">Invoices</h2>
+    <p class="text-muted mb-0">View and manage all invoices in your system.</p>
+  </div>
+  <a href="{{ url_for('new_invoice') }}" class="btn btn-primary">
+    <i class="fa-solid fa-plus me-2"></i>New Invoice
+  </a>
 </div>
 
-<div class="panel">
-  <div class="panel-header">
-    <div class="panel-title">Invoice List</div>
-    <div>
-      <a class="btn btn-primary btn-sm" href="{{ url_for('new_invoice') }}">➕ New Invoice</a>
-    </div>
-  </div>
-
-  <table>
-    <thead>
-      <tr>
-        <th>Number</th>
-        <th>Customer</th>
-        <th>Issue Date</th>
-        <th>Due Date</th>
-        <th>Status</th>
-        <th>Total</th>
-        <th>Balance</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for inv in invoices %}
+<div class="card-dark p-3 p-md-4">
+  <div class="table-responsive">
+    <table class="table table-dark align-middle mb-0">
+      <thead>
         <tr>
-          <td>{{ inv.invoice_number }}</td>
-          <td>{{ inv.customer.name }}</td>
-          <td>{{ inv.issue_date }}</td>
-          <td>{{ inv.due_date }}</td>
-          <td>{{ inv.status }}</td>
-          <td>{{ "%.2f"|format(inv.total_amount) }}</td>
-          <td>{{ "%.2f"|format(inv.balance_due) }}</td>
+          <th>#</th>
+          <th>Customer</th>
+          <th>Issue date</th>
+          <th>Due date</th>
+          <th class="text-end">Subtotal</th>
+          <th class="text-end">VAT</th>
+          <th class="text-end">Total</th>
+          <th class="text-end">Balance</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for invoice in invoices %}
+        <tr>
+          <td class="font-mono">{{ invoice.invoice_number }}</td>
+          <td>{{ invoice.customer.name if invoice.customer else '-' }}</td>
+          <td>{{ invoice.issue_date }}</td>
+          <td>{{ invoice.due_date }}</td>
+          <td class="text-end">{{ '%.2f'|format(invoice.subtotal_amount) }}</td>
+          <td class="text-end">{{ '%.2f'|format(invoice.tax_amount) }}</td>
+          <td class="text-end">{{ '%.2f'|format(invoice.total_amount) }}</td>
+          <td class="text-end">{{ '%.2f'|format(invoice.balance_due) }}</td>
           <td>
-            <a class="btn btn-primary btn-sm"
-               href="{{ url_for('invoice_detail', invoice_id=inv.id) }}">View</a>
-            <a class="btn btn-secondary btn-sm"
-               href="{{ url_for('edit_invoice', invoice_id=inv.id) }}">Edit</a>
+            {% set s = invoice.status %}
+            {% if s == 'draft' %}
+              <span class="status-pill status-pill-draft">Draft</span>
+            {% elif s == 'sent' %}
+              <span class="status-pill status-pill-sent">Sent</span>
+            {% elif s == 'paid' %}
+              <span class="status-pill status-pill-paid">Paid</span>
+            {% elif s == 'overdue' %}
+              <span class="status-pill status-pill-overdue">Overdue</span>
+            {% elif s == 'cancelled' %}
+              <span class="status-pill status-pill-cancelled">Cancelled</span>
+            {% else %}
+              <span class="status-pill status-pill-draft">{{ s }}</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <a href="{{ url_for('invoice_detail', invoice_id=invoice.id) }}"
+               class="btn btn-sm btn-outline-light">
+              View
+            </a>
           </td>
         </tr>
       {% else %}
-        <tr><td colspan="8" class="text-muted">No invoices yet.</td></tr>
+        <tr>
+          <td colspan="10" class="text-center text-muted py-4">
+            No invoices yet. <a href="{{ url_for('new_invoice') }}">Create your first invoice</a>.
+          </td>
+        </tr>
       {% endfor %}
-    </tbody>
-  </table>
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endblock %}
