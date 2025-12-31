@@ -1,136 +1,129 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="page-header mb-4 d-flex justify-content-between align-items-center">
-  <div>
-    <h2 class="mb-1">Invoices</h2>
-    <p class="text-muted mb-0">View and manage all invoices in your system.</p>
+<div class="row g-3 align-items-center mb-3">
+  <div class="col">
+    <h1 class="h4 mb-0">Invoices</h1>
+    <p class="text-muted-soft small mb-0">
+      Manage your invoices, filter by status and drill into details.
+    </p>
   </div>
-  <a href="{{ url_for('new_invoice') }}" class="btn btn-primary">
-    <i class="fa-solid fa-plus me-2"></i>New Invoice
-  </a>
-</div>
-
-<div class="card-dark p-3 p-md-4">
-  <!-- Filter pills -->
-  <div class="mb-3 d-flex flex-wrap gap-2">
-    <button type="button" class="nav-pill active" data-filter="open">
-      Open (hide paid)
-    </button>
-    <button type="button" class="nav-pill" data-filter="all">
-      All
-    </button>
-    <button type="button" class="nav-pill" data-filter="draft">
-      Draft
-    </button>
-    <button type="button" class="nav-pill" data-filter="sent">
-      Sent
-    </button>
-    <button type="button" class="nav-pill" data-filter="overdue">
-      Overdue
-    </button>
-    <button type="button" class="nav-pill" data-filter="paid">
-      Paid
-    </button>
-  </div>
-
-  <div class="table-responsive">
-    <table class="table table-dark align-middle mb-0" id="invoice-table">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Customer</th>
-          <th>Issue date</th>
-          <th>Due date</th>
-          <th class="text-end">Subtotal</th>
-          <th class="text-end">VAT</th>
-          <th class="text-end">Total</th>
-          <th class="text-end">Balance</th>
-          <th>Status</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for invoice in invoices %}
-        <tr data-status="{{ invoice.status }}">
-          <td class="font-mono">{{ invoice.invoice_number }}</td>
-          <td>{{ invoice.customer.name if invoice.customer else '-' }}</td>
-          <td>{{ invoice.issue_date }}</td>
-          <td>{{ invoice.due_date or '-' }}</td>
-          <td class="text-end">{{ '%.2f'|format(invoice.subtotal_amount) }}</td>
-          <td class="text-end">{{ '%.2f'|format(invoice.tax_amount) }}</td>
-          <td class="text-end">{{ '%.2f'|format(invoice.total_amount) }}</td>
-          <td class="text-end">{{ '%.2f'|format(invoice.balance_due) }}</td>
-          <td>
-            {% set s = invoice.status %}
-            {% if s == 'draft' %}
-              <span class="status-pill status-pill-draft">Draft</span>
-            {% elif s == 'sent' %}
-              <span class="status-pill status-pill-sent">Sent</span>
-            {% elif s == 'paid' %}
-              <span class="status-pill status-pill-paid">Paid</span>
-            {% elif s == 'overdue' %}
-              <span class="status-pill status-pill-overdue">Overdue</span>
-            {% elif s == 'cancelled' %}
-              <span class="status-pill status-pill-cancelled">Cancelled</span>
-            {% else %}
-              <span class="status-pill status-pill-draft">{{ s }}</span>
-            {% endif %}
-          </td>
-          <td class="text-end">
-            <a href="{{ url_for('invoice_detail', invoice_id=invoice.id) }}"
-               class="btn btn-sm btn-outline-light">
-              View
-            </a>
-          </td>
-        </tr>
-      {% else %}
-        <tr>
-          <td colspan="10" class="text-center text-muted py-4">
-            No invoices yet. <a href="{{ url_for('new_invoice') }}">Create your first invoice</a>.
-          </td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
+  <div class="col-auto">
+    <a href="{{ url_for('new_invoice') }}" class="btn btn-primary btn-sm">
+      <i class="fa-regular fa-file-lines me-1"></i> New invoice
+    </a>
   </div>
 </div>
-{% endblock %}
 
-{% block scripts %}
-<script>
-(function() {
-  const pills = document.querySelectorAll('[data-filter]');
-  const rows = document.querySelectorAll('#invoice-table tbody tr');
+<div class="card card-dark mb-3">
+  <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <span class="text-muted-soft small me-2">Status filter:</span>
 
-  function applyFilter(mode) {
-    rows.forEach(row => {
-      const status = (row.getAttribute('data-status') || '').toLowerCase();
-      let show = true;
+      <a href="{{ url_for('list_invoices', status='all') }}"
+         class="badge badge-pill {{ 'badge-soft-blue' if status_filter == 'all' else 'bg-transparent text-muted-soft border border-secondary' }} text-decoration-none">
+        All
+      </a>
+      <a href="{{ url_for('list_invoices', status='draft') }}"
+         class="badge badge-pill {{ 'badge-soft-amber' if status_filter == 'draft' else 'bg-transparent text-muted-soft border border-secondary' }} text-decoration-none">
+        Draft
+      </a>
+      <a href="{{ url_for('list_invoices', status='sent') }}"
+         class="badge badge-pill {{ 'badge-soft-blue' if status_filter == 'sent' else 'bg-transparent text-muted-soft border border-secondary' }} text-decoration-none">
+        Sent
+      </a>
+      <a href="{{ url_for('list_invoices', status='paid') }}"
+         class="badge badge-pill {{ 'badge-soft-green' if status_filter == 'paid' else 'bg-transparent text-muted-soft border border-secondary' }} text-decoration-none">
+        Paid
+      </a>
+      <a href="{{ url_for('list_invoices', status='overdue') }}"
+         class="badge badge-pill {{ 'badge-soft-red' if status_filter == 'overdue' else 'bg-transparent text-muted-soft border border-secondary' }} text-decoration-none">
+        Overdue
+      </a>
+      <a href="{{ url_for('list_invoices', status='cancelled') }}"
+         class="badge badge-pill {{ 'badge-soft-red' if status_filter == 'cancelled' else 'bg-transparent text-muted-soft border border-secondary' }} text-decoration-none">
+        Cancelled
+      </a>
+    </div>
+  </div>
+</div>
 
-      if (mode === 'open') {
-        // hide paid + cancelled by default
-        show = !(status === 'paid' || status === 'cancelled');
-      } else if (mode === 'all') {
-        show = true;
-      } else {
-        show = (status === mode);
-      }
-
-      row.style.display = show ? '' : 'none';
-    });
-  }
-
-  pills.forEach(btn => {
-    btn.addEventListener('click', () => {
-      pills.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      applyFilter(btn.getAttribute('data-filter'));
-    });
-  });
-
-  // default = "open" (hide paid)
-  applyFilter('open');
-})();
-</script>
+<div class="card card-dark">
+  <div class="card-body p-0">
+    {% if invoices %}
+    <div class="table-responsive">
+      <table class="table table-dark table-hover mb-0 align-middle">
+        <thead>
+          <tr>
+            <th scope="col">Invoice #</th>
+            <th scope="col">Customer</th>
+            <th scope="col">Issue date</th>
+            <th scope="col">Due date</th>
+            <th scope="col">Status</th>
+            <th scope="col" class="text-end">Subtotal</th>
+            <th scope="col" class="text-end">Total</th>
+            <th scope="col" class="text-end">Balance due</th>
+            <th scope="col" class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for invoice in invoices %}
+          <tr>
+            <td>
+              <a href="{{ url_for('invoice_detail', invoice_id=invoice.id) }}" class="text-decoration-none">
+                {{ invoice.number or ('INV-' ~ invoice.id) }}
+              </a>
+            </td>
+            <td>
+              {% if invoice.customer %}
+                {{ invoice.customer.name }}
+              {% else %}
+                <span class="text-muted-soft">No customer</span>
+              {% endif %}
+            </td>
+            <td>{{ invoice.issue_date.strftime("%Y-%m-%d") if invoice.issue_date else "-" }}</td>
+            <td>{{ invoice.due_date.strftime("%Y-%m-%d") if invoice.due_date else "-" }}</td>
+            <td>
+              {% set st = invoice.status or 'draft' %}
+              {% if st == 'paid' %}
+                <span class="badge badge-pill badge-soft-green text-uppercase small">{{ st }}</span>
+              {% elif st == 'overdue' %}
+                <span class="badge badge-pill badge-soft-red text-uppercase small>{{ st }}</span>
+              {% elif st == 'draft' %}
+                <span class="badge badge-pill badge-soft-amber text-uppercase small">{{ st }}</span>
+              {% else %}
+                <span class="badge badge-pill badge-soft-blue text-uppercase small">{{ st }}</span>
+              {% endif %}
+            </td>
+            <td class="text-end">
+              {{ '%.2f'|format(invoice.subtotal or 0) }}
+            </td>
+            <td class="text-end">
+              {{ '%.2f'|format(invoice.total or 0) }}
+            </td>
+            <td class="text-end">
+              {{ '%.2f'|format(invoice.balance_due or 0) }}
+            </td>
+            <td class="text-end">
+              <a href="{{ url_for('invoice_detail', invoice_id=invoice.id) }}"
+                 class="btn btn-sm btn-outline-light">
+                View
+              </a>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+      <div class="p-4 text-center text-muted-soft">
+        <p class="mb-1">No invoices found.</p>
+        <p class="small mb-3">Try adjusting the filter or create your first invoice.</p>
+        <a href="{{ url_for('new_invoice') }}" class="btn btn-primary btn-sm">
+          Create invoice
+        </a>
+      </div>
+    {% endif %}
+  </div>
+</div>
 {% endblock %}
