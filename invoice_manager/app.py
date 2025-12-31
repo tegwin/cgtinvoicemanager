@@ -93,36 +93,20 @@ class Customer(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
-    email = db.Column(db.String(255), nullable=True)
-    phone = db.Column(db.String(50), nullable=True)
-
-    # NEW: map to existing customers.tax_rate column in DB
-    tax_rate = db.Column(db.Numeric(5, 2), nullable=False, default=0)
-
-    address_line1 = db.Column(db.String(255), nullable=True)
-    address_line2 = db.Column(db.String(255), nullable=True)
-    city = db.Column(db.String(100), nullable=True)
-    postal_code = db.Column(db.String(20), nullable=True)
-    country = db.Column(db.String(100), nullable=True)
-
+    email = db.Column(db.String(255))
+    phone = db.Column(db.String(100))
+    tax_rate = db.Column(db.Numeric(5, 2), nullable=False, default=0)  # <-- add this
+    address_line1 = db.Column(db.String(255))
+    address_line2 = db.Column(db.String(255))
+    city = db.Column(db.String(100))
+    postcode = db.Column(db.String(50))
+    country = db.Column(db.String(100))
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(
+    db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     invoices = db.relationship("Invoice", back_populates="customer")
-
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "name": self.name,
-            "email": self.email,
-            "phone": self.phone,
-            "tax_rate": float(self.tax_rate or 0),
-            "address_line1": self.address_line1,
-            "address_line2": self.address_line2,
-            "city": self.city,
-            "postal_code": self.postal_code,
-            "country": self.country,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-        }
 
 
 
