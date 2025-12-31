@@ -1,160 +1,243 @@
 {% extends "base.html" %}
-
 {% block content %}
-<div class="mb-3">
-  <h1 class="h3 mb-0">Settings</h1>
-  <div class="section-subtitle">
-    Configure branding, tax, payment terms and outgoing webhooks.
+<div class="row mb-3">
+  <div class="col">
+    <h1 class="h3 mb-1">Settings</h1>
+    <p class="text-muted-soft mb-0">
+      Configure branding, tax, payment terms and outgoing webhooks.
+    </p>
   </div>
 </div>
 
-<div class="card-dark p-3 p-md-4">
-  <form method="post">
+<form method="post">
+  {{ csrf_token() if csrf_token is defined }}
 
-    <div class="row g-4">
+  <div class="row g-4">
 
-      <!-- Branding -->
-      <div class="col-lg-6">
+    <!-- BRANDING -->
+    <div class="col-12 col-xl-6">
+      <div class="card-dark p-4 h-100">
         <h2 class="section-title mb-1">Branding</h2>
-        <p class="section-subtitle mb-3">
+        <p class="section-subtitle mb-4">
           Set how the app appears in the header and on invoices.
         </p>
 
         <div class="mb-3">
           <label class="form-label">Brand name</label>
-          <input type="text"
-                 name="brand_name"
-                 class="form-control"
-                 placeholder="e.g. Sondela Consulting"
-                 value="{{ settings.brand_name or '' }}">
+          <input
+            type="text"
+            class="form-control"
+            name="brand_name"
+            value="{{ settings.brand_name or '' }}"
+            placeholder="e.g. Sondela Consulting"
+          >
         </div>
 
-        <div class="mb-3">
+        <div class="mb-0">
           <label class="form-label">Logo URL</label>
-          <input type="text"
-                 name="logo_url"
-                 class="form-control"
-                 placeholder="https://…"
-                 value="{{ settings.logo_url or '' }}">
-          <div class="form-text text-muted-soft">
-            Optional. Used on invoice PDFs / print view in future.
+          <input
+            type="url"
+            class="form-control"
+            name="logo_url"
+            value="{{ settings.logo_url or '' }}"
+            placeholder="https://example.com/logo.png"
+          >
+          <div class="form-text text-muted-soft mt-1">
+            Optional. Used on invoice PDFs / print view.
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- Tax & terms -->
-      <div class="col-lg-6">
+    <!-- TAX & PAYMENT TERMS -->
+    <div class="col-12 col-xl-6">
+      <div class="card-dark p-4 h-100">
         <h2 class="section-title mb-1">Tax &amp; payment terms</h2>
-        <p class="section-subtitle mb-3">
+        <p class="section-subtitle mb-4">
           Global defaults used when creating new invoices.
         </p>
 
         <div class="mb-3">
           <label class="form-label">Default tax rate (%)</label>
-          <input type="number"
-                 name="default_tax_rate"
-                 class="form-control"
-                 step="0.01" min="0"
-                 value="{{ settings.default_tax_rate or 0 }}">
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            class="form-control"
+            name="default_tax_rate"
+            value="{{ settings.default_tax_rate or '' }}"
+          >
         </div>
 
         <div class="mb-3">
-          <label class="form-label">Payment terms</label>
+          <label class="form-label d-flex justify-content-between align-items-center">
+            <span>Payment terms</span>
+            <span class="small text-muted-soft">
+              Global due-date behaviour
+            </span>
+          </label>
+
           <div class="form-check form-switch mb-2">
-            <input class="form-check-input"
-                   type="checkbox"
-                   id="use_global_payment_terms"
-                   name="use_global_payment_terms"
-                   {% if settings.use_global_payment_terms %}checked{% endif %}>
+            <input
+              class="form-check-input"
+              type="checkbox"
+              role="switch"
+              id="use_global_payment_terms"
+              name="use_global_payment_terms"
+              value="1"
+              {% if settings.use_global_payment_terms %}checked{% endif %}
+            >
             <label class="form-check-label" for="use_global_payment_terms">
               Use global payment terms
             </label>
           </div>
-          <input type="number"
-                 name="payment_terms_days"
-                 class="form-control"
-                 min="1"
-                 placeholder="30"
-                 value="{{ settings.payment_terms_days or '' }}">
-          <div class="form-text text-muted-soft">
-            When enabled and a due date isn’t set manually, the due date will be
-            <code>issue date + this many days</code>.
+
+          <input
+            type="number"
+            min="0"
+            class="form-control"
+            name="payment_terms_days"
+            value="{{ settings.payment_terms_days or 0 }}"
+          >
+          <div class="form-text text-muted-soft mt-1">
+            When enabled and a due date isn’t set manually,
+            the due date will be <code>issue date + this many days</code>.
           </div>
         </div>
       </div>
     </div>
 
-    <hr class="my-4" style="border-color: rgba(15,23,42,0.9);">
-
-    <!-- Webhooks -->
-    <div class="row g-4">
-      <div class="col-lg-7">
+    <!-- OUTGOING WEBHOOKS -->
+    <div class="col-12 col-xl-6">
+      <div class="card-dark p-4 h-100">
         <h2 class="section-title mb-1">Outgoing webhooks</h2>
-        <p class="section-subtitle mb-3">
+        <p class="section-subtitle mb-4">
           Notify an external system when invoices or payments change.
         </p>
 
-        <input type="hidden" name="outbound_webhook_enabled_present" value="1">
-
         <div class="mb-3">
           <label class="form-label">Webhook URL</label>
-          <input type="text"
-                 name="outbound_webhook_url"
-                 class="form-control"
-                 placeholder="https://example.com/webhooks/invoices"
-                 value="{{ settings.outbound_webhook_url or '' }}">
-          <div class="form-text text-muted-soft">
-            Events will be sent as POST requests with a JSON body.
+          <input
+            type="url"
+            class="form-control"
+            name="outbound_webhook_url"
+            value="{{ settings.outbound_webhook_url or '' }}"
+            placeholder="https://webhook.site/your-endpoint"
+          >
+          <div class="form-text text-muted-soft mt-1">
+            Events will be sent as <code>POST</code> requests with a JSON body.
           </div>
         </div>
 
-        <div class="mb-3">
-          <div class="form-check form-switch">
-            <input class="form-check-input"
-                   type="checkbox"
-                   id="outbound_webhook_enabled"
-                   name="outbound_webhook_enabled"
-                   {% if settings.outbound_webhook_enabled %}checked{% endif %}>
-            <label class="form-check-label" for="outbound_webhook_enabled">
-              Enable outgoing webhooks
-            </label>
-          </div>
+        <div class="form-check form-switch mb-0">
+          <input
+            class="form-check-input"
+            type="checkbox"
+            role="switch"
+            id="outbound_webhook_enabled"
+            name="outbound_webhook_enabled"
+            value="1"
+            {% if settings.outbound_webhook_enabled %}checked{% endif %}
+          >
+          <label class="form-check-label" for="outbound_webhook_enabled">
+            Enable outgoing webhooks
+          </label>
         </div>
       </div>
+    </div>
 
-      <div class="col-lg-5">
-        <h3 class="section-title mb-2">Events to send</h3>
-        <p class="section-subtitle mb-2">
-          Tick which events should fire the webhook. Leave all unticked to disable
-          events without turning webhooks off entirely.
+    <!-- EVENTS TO SEND -->
+    <div class="col-12 col-xl-6">
+      <div class="card-dark p-4 h-100">
+        <h2 class="section-title mb-1">Events to send</h2>
+        <p class="section-subtitle mb-4">
+          Tick which events should fire the webhook. Leave all unticked to
+          disable events without turning webhooks off entirely.
         </p>
 
-        <div class="card-dark-soft p-3">
-          {% for value, label in available_events %}
-          <div class="form-check mb-2">
-            <input class="form-check-input"
-                   type="checkbox"
-                   name="outbound_webhook_events"
-                   id="evt-{{ value }}"
-                   value="{{ value }}"
-                   {% if value in selected_events %}checked{% endif %}>
-            <label class="form-check-label" for="evt-{{ value }}">
-              {{ label }}
-            </label>
+        {% set selected_events = (settings.outbound_webhook_events or '').split(',') %}
+
+        <div class="row g-2 mb-3">
+          <div class="col-12 col-md-6">
+            <div class="form-check">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                id="event_invoice_created"
+                name="outbound_webhook_events"
+                value="invoice.created"
+                {% if 'invoice.created' in selected_events %}checked{% endif %}
+              >
+              <label class="form-check-label" for="event_invoice_created">
+                Invoice created
+              </label>
+            </div>
           </div>
-          {% endfor %}
-          <div class="small text-muted-soft mt-2">
-            Payload contains <code>event</code>, <code>data</code> and <code>sent_at</code>.
+
+          <div class="col-12 col-md-6">
+            <div class="form-check">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                id="event_invoice_updated"
+                name="outbound_webhook_events"
+                value="invoice.updated"
+                {% if 'invoice.updated' in selected_events %}checked{% endif %}
+              >
+              <label class="form-check-label" for="event_invoice_updated">
+                Invoice updated
+              </label>
+            </div>
           </div>
+
+          <div class="col-12 col-md-6">
+            <div class="form-check">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                id="event_invoice_paid"
+                name="outbound_webhook_events"
+                value="invoice.paid"
+                {% if 'invoice.paid' in selected_events %}checked{% endif %}
+              >
+              <label class="form-check-label" for="event_invoice_paid">
+                Invoice paid
+              </label>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-6">
+            <div class="form-check">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                id="event_payment_recorded"
+                name="outbound_webhook_events"
+                value="payment.recorded"
+                {% if 'payment.recorded' in selected_events %}checked{% endif %}
+              >
+              <label class="form-check-label" for="event_payment_recorded">
+                Payment recorded
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="alert-soft small mb-0">
+          Payload contains <code>event</code>, <code>data</code> and
+          <code>sent_at</code>.
         </div>
       </div>
     </div>
 
-    <div class="mt-4 d-flex justify-content-end">
-      <button type="submit" class="btn btn-primary">
-        <i class="fa-regular fa-floppy-disk me-2"></i> Save settings
-      </button>
+    <!-- SAVE BUTTON -->
+    <div class="col-12">
+      <div class="d-flex justify-content-end mt-2">
+        <button type="submit" class="btn btn-primary px-4">
+          Save settings
+        </button>
+      </div>
     </div>
-  </form>
-</div>
+  </div>
+</form>
 {% endblock %}
