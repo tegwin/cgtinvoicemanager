@@ -5,7 +5,7 @@ import hashlib
 import hashlib
 from functools import wraps
 
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from decimal import Decimal
 
 from flask import (
@@ -313,6 +313,22 @@ def invoice_to_dict(inv: Invoice) -> dict:
         }
         if inv.customer
         else None,
+    }
+
+
+def customer_to_dict(c: Customer) -> dict:
+    return {
+        "id": c.id,
+        "name": c.name,
+        "email": c.email,
+        "phone": c.phone,
+        "address_line1": c.address_line1,
+        "address_line2": c.address_line2,
+        "city": c.city,
+        "postcode": c.postcode,
+        "country": c.country,
+        "created_at": c.created_at.isoformat() if c.created_at else None,
+        "updated_at": c.updated_at.isoformat() if c.updated_at else None,
     }
 
 
@@ -871,8 +887,7 @@ def api_docs():
 # API endpoints
 # ------------------------------------------------------------------------------
 
-# Existing POST /api/invoices should already be present in your old file.
-# Here is a safe version that matches what we've been using.
+# Invoices API
 
 @app.route("/api/invoices", methods=["POST"])
 @require_api_key(can_write=True)
@@ -896,8 +911,6 @@ def api_create_invoice():
     if data.get("due_date"):
         due_date = datetime.fromisoformat(data["due_date"]).date()
     elif settings.use_global_payment_terms and settings.payment_terms_days:
-        from datetime import timedelta
-
         due_date = issue_date + timedelta(days=settings.payment_terms_days)
     else:
         due_date = None
@@ -965,7 +978,6 @@ def api_create_invoice():
     return jsonify(invoice_to_dict(invoice)), 201
 
 
-# NEW: GET /api/invoices (this was giving you 405 before)
 @app.route("/api/invoices", methods=["GET"])
 @require_api_key(can_read=True)
 def api_list_invoices():
@@ -973,7 +985,50 @@ def api_list_invoices():
     return jsonify([invoice_to_dict(inv) for inv in invoices])
 
 
-# You can later add /api/customers, /api/products, etc. in a similar style.
+@app.route("/api/invoices/<int:invoice_id>", methods=["GET"])
+@require_api_key(can_read=True)
+def api_get_invoice(invoice_id):
+    invoice = Invoice.query.get_or_404(invoice_id)
+    return jsonify(invoice_to_dict(invoice))
+
+
+# Customers API
+
+@app.route("/api/customers", methods=["GET"])
+@require_api_key(can_read=True)
+def api_list_customers():
+    customers = Customer.query.order_by(Customer.id.desc()).all()
+    return jsonify([customer_to_dict(c) for c in customers])
+
+
+@app.route("/api/customers/<int:customer_id>", methods=["GET"])
+@require_api_key(can_read=True)
+def api_get_customer(customer_id):
+    customer = Customer.query.get_or_404(customer_id)
+    return jsonify(customer_to_dict(customer))
+
+
+@app.route("/api/customers", methods=["POST"])
+@require_api_key(can_write=True)
+def api_create_customer():
+    data = request.get_json(force=True, silent=True) or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "name is required"}), 400
+
+    customer = Customer(
+        name=name,
+        email=(data.get("email") or None),
+        phone=(data.get("phone") or None),
+        address_line1=(data.get("address_line1") or None),
+        address_line2=(data.get("address_line2") or None),
+        city=(data.get("city") or None),
+        postcode=(data.get("postcode") or None),
+        country=(data.get("country") or None),
+    )
+    db.session.add(customer)
+    db.session.commit()
+    return jsonify(customer_to_dict(customer)), 201
 
 
 # ------------------------------------------------------------------------------
