@@ -6,7 +6,7 @@
     <h2 class="mb-0">
       {% if invoice %}Edit Invoice{% else %}New Invoice{% endif %}
     </h2>
-    <div class="text-muted-soft small">
+    <div class="text-muted small">
       Choose a customer, add product lines, and review totals in real time.
     </div>
   </div>
@@ -36,14 +36,15 @@
             <input type="date"
                    name="issue_date"
                    class="form-control"
-                   value="{{ (invoice.issue_date if invoice else '') }}">
+                   value="{% if invoice and invoice.issue_date %}{{ invoice.issue_date }}{% endif %}"
+                   required>
           </div>
           <div class="col-md-3">
             <label class="form-label">Due date</label>
             <input type="date"
                    name="due_date"
                    class="form-control"
-                   value="{{ (invoice.due_date if invoice else '') }}">
+                   value="{% if invoice and invoice.due_date %}{{ invoice.due_date }}{% endif %}">
           </div>
         </div>
 
@@ -65,7 +66,8 @@
           </div>
         </div>
 
-        <input type="hidden" id="tax-rate-input"
+        <input type="hidden"
+               id="tax-rate-input"
                value="{{ (invoice.tax_rate if invoice and invoice.tax_rate is not none else settings.default_tax_rate) or 0 }}">
 
         <div class="mb-2 d-flex justify-content-between align-items-center">
@@ -105,21 +107,29 @@
                     </select>
                   </td>
                   <td>
-                    <input type="text" name="item_description" class="form-control"
+                    <input type="text"
+                           name="item_description"
+                           class="form-control"
                            value="{{ item.description }}">
                   </td>
                   <td>
-                    <input type="number" step="0.01" min="0" name="item_quantity"
+                    <input type="number"
+                           step="0.01"
+                           min="0"
+                           name="item_quantity"
                            class="form-control text-end"
                            value="{{ item.quantity }}">
                   </td>
                   <td>
-                    <input type="number" step="0.01" min="0" name="item_unit_price"
+                    <input type="number"
+                           step="0.01"
+                           min="0"
+                           name="item_unit_price"
                            class="form-control text-end"
                            value="{{ item.unit_price }}">
                   </td>
                   <td class="text-end">
-                    <span class="line-total">{{ "%.2f"|format(item.line_total or 0) }}</span>
+                    <span class="line-total">{{ item.line_total }}</span>
                   </td>
                   <td>
                     <button type="button" class="btn btn-sm btn-outline-danger remove-line-btn">
@@ -146,12 +156,20 @@
                   <input type="text" name="item_description" class="form-control">
                 </td>
                 <td>
-                  <input type="number" step="0.01" min="0" name="item_quantity"
-                         class="form-control text-end" value="1">
+                  <input type="number"
+                         step="0.01"
+                         min="0"
+                         name="item_quantity"
+                         class="form-control text-end"
+                         value="1">
                 </td>
                 <td>
-                  <input type="number" step="0.01" min="0" name="item_unit_price"
-                         class="form-control text-end" value="0.00">
+                  <input type="number"
+                         step="0.01"
+                         min="0"
+                         name="item_unit_price"
+                         class="form-control text-end"
+                         value="0.00">
                 </td>
                 <td class="text-end">
                   <span class="line-total">0.00</span>
@@ -180,7 +198,8 @@
   </div>
 
   <div class="col-lg-4">
-    <div class="card-dark p-3 p-md-4">
+    <!-- Totals card -->
+    <div class="card-dark p-3 p-md-4 mb-3">
       <h5 class="mb-3">Totals</h5>
       <div class="d-flex justify-content-between mb-2">
         <span class="text-muted-soft">Subtotal</span>
@@ -192,13 +211,41 @@
         </span>
         <span id="summary-tax">0.00</span>
       </div>
-      <hr class="my-2" style="border-color: rgba(255,255,255,0.08);">
+      <hr class="my-2" style="border-color: rgba(255,255,255,0.1);">
       <div class="d-flex justify-content-between align-items-center mb-1">
         <span class="fw-semibold">Total</span>
         <span class="fw-bold fs-5" id="summary-total">0.00</span>
       </div>
       <div class="text-muted-soft small">
         Totals are indicative based on the current customer tax settings and line items.
+      </div>
+    </div>
+
+    <!-- NEW: simple payment section (date picker) -->
+    <div class="card-dark p-3 p-md-4">
+      <h5 class="mb-3">Payment</h5>
+      <div class="mb-2">
+        <div class="form-check">
+          <input class="form-check-input"
+                 type="checkbox"
+                 id="mark-paid-checkbox"
+                 name="mark_as_paid"
+                 value="1"
+                 {% if invoice and invoice.status == 'paid' %}checked{% endif %}>
+          <label class="form-check-label" for="mark-paid-checkbox">
+            Mark invoice as paid
+          </label>
+        </div>
+      </div>
+      <div class="mb-2">
+        <label class="form-label">Payment date</label>
+        <input type="date"
+               name="payment_date"
+               class="form-control"
+               value="{% if invoice and invoice.payment_date %}{{ invoice.payment_date }}{% endif %}">
+        <div class="form-text text-muted-soft">
+          Optional. Use when marking the invoice as paid.
+        </div>
       </div>
     </div>
   </div>
@@ -208,6 +255,17 @@
 {% block scripts %}
 <script>
 (function() {
+  const products = [
+    {% for p in products %}
+    {
+      id: {{ p.id }},
+      name: "{{ p.name|e }}",
+      description: "{{ (p.description or '')|e }}",
+      price: {{ p.unit_price or 0 }}
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ];
+
   function recalcTotals() {
     let subtotal = 0;
     document.querySelectorAll("#items-table tbody tr.item-row").forEach(row => {
