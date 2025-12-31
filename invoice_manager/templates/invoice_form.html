@@ -36,7 +36,7 @@
             <input type="date"
                    name="issue_date"
                    class="form-control"
-                   value="{% if invoice and invoice.issue_date %}{{ invoice.issue_date }}{% endif %}"
+                   value="{% if invoice and invoice.issue_date %}{{ invoice.issue_date.strftime('%Y-%m-%d') }}{% endif %}"
                    required>
           </div>
           <div class="col-md-3">
@@ -44,7 +44,7 @@
             <input type="date"
                    name="due_date"
                    class="form-control"
-                   value="{% if invoice and invoice.due_date %}{{ invoice.due_date }}{% endif %}">
+                   value="{% if invoice and invoice.due_date %}{{ invoice.due_date.strftime('%Y-%m-%d') }}{% endif %}">
           </div>
         </div>
 
@@ -53,7 +53,7 @@
             <label class="form-label">Status</label>
             <select name="status" class="form-select">
               {% set current_status = invoice.status if invoice else 'draft' %}
-              {% for s in ['draft','sent','paid','overdue','cancelled'] %}
+              {% for s in ['draft','sent','paid','partial','overdue','cancelled'] %}
                 <option value="{{ s }}" {% if current_status == s %}selected{% endif %}>
                   {{ s|capitalize }}
                 </option>
@@ -94,12 +94,12 @@
               {% for item in invoice.items %}
                 <tr class="item-row">
                   <td>
-                    <select class="form-select product-select">
+                    <select class="form-select product-select" name="item_product_id">
                       <option value="">Manual...</option>
                       {% for p in products %}
                         <option value="{{ p.id }}"
-                                data-description="{{ p.description|e }}"
-                                data-price="{{ p.unit_price }}"
+                                data-description="{{ (p.description or '')|e }}"
+                                data-price="{{ p.unit_price or 0 }}"
                                 {% if item.product_id == p.id %}selected{% endif %}>
                           {{ p.name }}
                         </option>
@@ -126,10 +126,10 @@
                            min="0"
                            name="item_unit_price"
                            class="form-control text-end"
-                           value="{{ item.unit_price }}">
+                           value="{{ '%.2f'|format(item.unit_price) }}">
                   </td>
                   <td class="text-end">
-                    <span class="line-total">{{ item.line_total }}</span>
+                    <span class="line-total">{{ '%.2f'|format(item.line_total or 0) }}</span>
                   </td>
                   <td>
                     <button type="button" class="btn btn-sm btn-outline-danger remove-line-btn">
@@ -141,12 +141,12 @@
             {% else %}
               <tr class="item-row">
                 <td>
-                  <select class="form-select product-select">
+                  <select class="form-select product-select" name="item_product_id">
                     <option value="">Manual...</option>
                     {% for p in products %}
                       <option value="{{ p.id }}"
-                              data-description="{{ p.description|e }}"
-                              data-price="{{ p.unit_price }}">
+                              data-description="{{ (p.description or '')|e }}"
+                              data-price="{{ p.unit_price or 0 }}">
                         {{ p.name }}
                       </option>
                     {% endfor %}
@@ -198,7 +198,6 @@
   </div>
 
   <div class="col-lg-4">
-    <!-- Totals card -->
     <div class="card-dark p-3 p-md-4 mb-3">
       <h5 class="mb-3">Totals</h5>
       <div class="d-flex justify-content-between mb-2">
@@ -221,33 +220,42 @@
       </div>
     </div>
 
-    <!-- NEW: simple payment section (date picker) -->
-    <div class="card-dark p-3 p-md-4">
+    {# Payment section: ONLY on edit, with date picker #}
+    {% if invoice %}
+    <div class="card-dark mt-3 p-3 p-md-4">
       <h5 class="mb-3">Payment</h5>
-      <div class="mb-2">
-        <div class="form-check">
-          <input class="form-check-input"
-                 type="checkbox"
-                 id="mark-paid-checkbox"
-                 name="mark_as_paid"
-                 value="1"
-                 {% if invoice and invoice.status == 'paid' %}checked{% endif %}>
-          <label class="form-check-label" for="mark-paid-checkbox">
-            Mark invoice as paid
-          </label>
+
+      <div class="mb-3">
+        <label class="form-label">Payment amount</label>
+        <input type="number"
+               step="0.01"
+               min="0"
+               name="payment_amount"
+               class="form-control text-end"
+               value="">
+        <div class="form-text text-muted-soft">
+          Leave blank to keep the current balance.
         </div>
       </div>
-      <div class="mb-2">
+
+      <div class="mb-3">
         <label class="form-label">Payment date</label>
         <input type="date"
                name="payment_date"
                class="form-control"
-               value="{% if invoice and invoice.payment_date %}{{ invoice.payment_date }}{% endif %}">
-        <div class="form-text text-muted-soft">
-          Optional. Use when marking the invoice as paid.
-        </div>
+               value="{{ invoice.payment_date.strftime('%Y-%m-%d') if invoice and invoice.payment_date else '' }}">
+      </div>
+
+      <div class="mb-2">
+        <label class="form-label">Mark status</label>
+        <select name="payment_status" class="form-select">
+          <option value="">Don't change</option>
+          <option value="paid">Mark as Paid</option>
+          <option value="partial">Mark as Partially Paid</option>
+        </select>
       </div>
     </div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}
@@ -255,17 +263,6 @@
 {% block scripts %}
 <script>
 (function() {
-  const products = [
-    {% for p in products %}
-    {
-      id: {{ p.id }},
-      name: "{{ p.name|e }}",
-      description: "{{ (p.description or '')|e }}",
-      price: {{ p.unit_price or 0 }}
-    }{% if not loop.last %},{% endif %}
-    {% endfor %}
-  ];
-
   function recalcTotals() {
     let subtotal = 0;
     document.querySelectorAll("#items-table tbody tr.item-row").forEach(row => {
@@ -273,8 +270,8 @@
       const priceInput = row.querySelector('input[name="item_unit_price"]');
       const lineSpan = row.querySelector(".line-total");
 
-      const qty = parseFloat(qtyInput.value || "0") || 0;
-      const price = parseFloat(priceInput.value || "0") || 0;
+      const qty = parseFloat(qtyInput && qtyInput.value || "0") || 0;
+      const price = parseFloat(priceInput && priceInput.value || "0") || 0;
       const line = qty * price;
       subtotal += line;
 
@@ -285,7 +282,7 @@
 
     const taxRateInput = document.getElementById("tax-rate-input");
     const taxRateSpan = document.getElementById("summary-tax-rate");
-    let taxRate = parseFloat(taxRateInput.value || "0") || 0;
+    let taxRate = parseFloat(taxRateInput && taxRateInput.value || "0") || 0;
     const tax = subtotal * taxRate / 100.0;
     const total = subtotal + tax;
 
@@ -326,10 +323,10 @@
         const desc = selected.getAttribute("data-description") || "";
         const price = selected.getAttribute("data-price") || "";
 
-        if (desc && descInput.value.trim() === "") {
+        if (desc && descInput && descInput.value.trim() === "") {
           descInput.value = desc;
         }
-        if (price) {
+        if (price && priceInput) {
           priceInput.value = parseFloat(price).toFixed(2);
         }
         recalcTotals();
@@ -345,12 +342,12 @@
     row.classList.add("item-row");
     row.innerHTML = `
       <td>
-        <select class="form-select product-select">
+        <select class="form-select product-select" name="item_product_id">
           <option value="">Manual...</option>
           {% for p in products %}
           <option value="{{ p.id }}"
-                  data-description="{{ p.description|e }}"
-                  data-price="{{ p.unit_price }}">
+                  data-description="{{ (p.description or '')|e }}"
+                  data-price="{{ p.unit_price or 0 }}">
             {{ p.name }}
           </option>
           {% endfor %}
