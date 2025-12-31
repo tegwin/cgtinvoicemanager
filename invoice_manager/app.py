@@ -1375,7 +1375,7 @@ def api_product_detail(product_id):
 
 # --- Invoices API (basic) ---
 
-@app.route("/api/invoices", methods=["POST"])
+@app.route("/api/invoices", methods=["GET","POST"])
 def api_create_invoice():
     require_api_key(write=True)
     data = request.get_json(force=True)
